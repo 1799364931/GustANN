@@ -48,6 +48,12 @@ static void bind_core(int core_num) {
 
 #define REPORT(fmt, ...) printf("[REPORT] " fmt "\n", __VA_ARGS__)
 
+#define BACKEND_SPDK 0 
+#define BACKEND_URING 1
+#define BACKEND_MEM 2
+
+#define USE_IO BACKEND_MEM
+
 #define NAV_GRAPH
 //#define LOAD_PROBE
 //#define COPY_DATA
@@ -126,6 +132,34 @@ namespace gustann {
       local_dest[i + offset] = local_src[i + offset];
     }
   }
+
+  // Make a naiive fully synchornous memcpy for simplexity
+  // TODO: Avoid DRAM memcpy (using cudaMemcpyAsync) while enabling selective transfer
+  struct MemIOSync {
+    uint8_t* index;
+    MemIOSync(const char* filename, int64_t num_pages) {
+      FILE* file = fopen(filename, "rb");
+      index = new uint8_t [num_pages * PAGE_SIZE];
+      fseek(file, PAGE_SIZE, SEEK_SET);
+      int64_t ret = fread(index, PAGE_SIZE, num_pages, file);
+      if (ret != num_pages) {
+        printf("Mem Index Load FAILED!\n");
+        printf("%ld %ld\n", ret, num_pages);
+        throw;
+      }
+      fclose(file);
+      printf("Mem Index Loaded!\n");
+    }
+    void send_requests(const std::vector<std::pair<int, void*>>& pages, int tid, int cid) {
+      for (auto [blk, dst] : pages) {
+        memcpy(dst, index + (int64_t) blk * PAGE_SIZE, PAGE_SIZE);
+      }
+    }
+    bool check_ready(int) {
+      return true;
+    }
+  };
+
   
   struct TaskRunner {
 
@@ -165,7 +199,11 @@ namespace gustann {
     uint8_t* buffer_dev;
     int32_t* request_dev;
 #endif
+#if USE_IO == BACKEND_SPDK
     std::shared_ptr<SpdkIO> spdk;
+#elif USE_IO == BACKEND_MEM
+    std::shared_ptr<MemIOSync> mem_io;
+#endif
     
     enum {
       Q_INIT,
@@ -449,7 +487,11 @@ namespace gustann {
       //printf("%d\n", qcnt);
       //uring.read_pages(threadid, pages);
 
+#if USE_IO == BACKEND_SPDK
       spdk->push_queue(pages, tid, cid);
+#elif USE_IO == BACKEND_MEM
+      mem_io->send_requests(pages, tid, cid);
+#endif
 
 #ifdef LOAD_PROBE
       std::sort(ssd_cnt.begin(), ssd_cnt.end());
@@ -556,7 +598,13 @@ namespace gustann {
         break;
       }
       case Q_SSD: {
-        if (spdk->check_ready(cid)) {
+#if USE_IO == BACKEND_SPDK
+        bool ready = spdk->check_ready(cid);
+#elif USE_IO == BACKEND_MEM
+        bool ready = mem_io->check_ready(cid);
+#endif
+        if (ready) {
+
           //printf("!!!! SSD->GPU \n");
           time_ssd += elapsed();
           submit_gpu();
@@ -574,7 +622,12 @@ namespace gustann {
                int _topk, int _num_data, int _max_m0, int _ef_search,
                int _enter_point, uint8_t* _starter, PQSearch *_pq,
                int nodes_per_page, int node_size, int data_size,
-               std::shared_ptr<SpdkIO> _spdk, NavGraph* _nav_graph) {
+#if USE_IO == BACKEND_SPDK
+               std::shared_ptr<SpdkIO> _spdk,
+#elif USE_IO == BACKEND_MEM
+               std::shared_ptr<MemIOSync> _memio,
+#endif
+               NavGraph* _nav_graph) {
 
       tid = _tid;
       cid = _cid;
@@ -594,7 +647,11 @@ namespace gustann {
       nodes_per_page_ = nodes_per_page;
       node_size_ = node_size;
       data_size_ = data_size;
+#if USE_IO == BACKEND_SPDK
       spdk = _spdk;
+#elif USE_IO == BACKEND_MEM
+      mem_io = _memio;
+#endif
 
       nav_graph = _nav_graph;
 
@@ -618,10 +675,14 @@ namespace gustann {
              1.0 * free_mem, 1.0 * tot_mem );
 #endif
       //CHECK_CUDA(cudaMallocHost(&buffer, sizeof(uint8_t) * PAGE_SIZE * mini_batch));
-      
+
+#if USE_IO == BACKEND_SPDK
       buffer =
         (uint8_t *) spdk_dma_zmalloc_socket(sizeof(uint8_t) * PAGE_SIZE * mini_batch,
                                             PAGE_SIZE, NULL, 1);
+#else
+      buffer = new uint8_t [(size_t) PAGE_SIZE * mini_batch];
+#endif
 
       CHECK_CUDA(cudaHostRegister(buffer, sizeof(uint8_t) * PAGE_SIZE * mini_batch, cudaHostRegisterDefault));
 #ifdef COPY_DATA
@@ -691,8 +752,11 @@ namespace gustann {
     uint8_t* starter = new uint8_t[PAGE_SIZE];
     fseek(input, (long) PAGE_SIZE * (enter_point_ / nodes_per_page_ + 1), SEEK_SET);
     fread((char*) starter, sizeof(char), PAGE_SIZE, input);
-    std::atomic<int> tot_reads(0);
 
+    fclose(input);
+    
+    std::atomic<int> tot_reads(0);
+#if USE_IO == BACKEND_SPDK
     auto spdk = SpdkIO::create();
     std::vector<std::string> ssds = config.ssd_list;
     if (ssds.empty()) {
@@ -701,7 +765,12 @@ namespace gustann {
     }
     spdk->init(ssds, mini_batch * ctx_per_thread, stream_cnt,
                stream_cnt * ctx_per_thread);
-
+#elif USE_IO == BACKEND_MEM
+    std::shared_ptr<MemIOSync> mem_io = std::make_shared<MemIOSync>(fpath_.c_str(), num_pages_);
+#else
+#error "Wrong USE_IO Settings!"
+#endif
+    
     NavGraph nav_graph;
 #ifdef NAV_GRAPH
     const std::string nav_index_file = config.nav_data + "/" + "nav_index";
@@ -728,7 +797,12 @@ namespace gustann {
                            topk, num_data_, max_m0_, ef_search,
                            enter_point_, starter, pq,
                            nodes_per_page_, node_size_, data_size_,
-                           spdk, &nav_graph);
+#if USE_IO == BACKEND_BACKEND
+                           spdk,
+#else
+                           mem_io,
+#endif                           
+                           &nav_graph);
       }
       double t0 = elapsed();
       INFO("Thread {} started", threadid);
