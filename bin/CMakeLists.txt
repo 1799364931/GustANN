@@ -43,7 +43,7 @@ IF(GUSTANN_USE_BAM)
   
   add_executable(search_disk search_disk.cu
     ../src/ssd_search.cu ../src/ssd_search_kernel.cu ../src/pq_search.cu
-    ../src/nav_graph.cu
+    ../src/nav_graph.cu ../src/bam.cu
   )
   target_include_directories(search_disk PRIVATE ${APP_INCLUDE_LIBRARY})
   target_link_libraries(search_disk PRIVATE ${APP_LINK_LIBRARY})

@@ -37,21 +37,6 @@
 
 
 
-static double elapsed() {
-  struct timeval tv;
-  gettimeofday(&tv, nullptr);
-  return tv.tv_sec + tv.tv_usec * 1e-6;
-}
-
-static void bind_core(int core_num) {
-  cpu_set_t set;
-  CPU_ZERO(&set);
-  CPU_SET(core_num, &set);
-  if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set) != 0) {
-    perror("pthread_setaffinity_np");
-    exit(-1);
-  }
-}
 
 #define REPORT(fmt, ...) printf("[REPORT] " fmt "\n", __VA_ARGS__)
 
@@ -701,14 +686,14 @@ namespace gustann {
                              ) {
     int batch_cnt = mini_batch * stream_cnt * ctx_per_thread;
     //num_queries = 1;
-    CHECK_CUDA(cudaHostRegister((void*)qdata, sizeof(float) * num_queries * num_dims_, cudaHostRegisterDefault));
+    CHECK_CUDA(cudaHostRegister((void*)qdata, sizeof(float) * num_queries * layout_.num_dims, cudaHostRegisterDefault));
     
-    if (pq) pq->init_device(num_dims_, num_data_, batch_cnt, ef_search);
+    if (pq) pq->init_device(layout_.num_dims, layout_.num_data, batch_cnt, ef_search);
     
     FILE* input = fopen(fpath_.c_str(), "rb");
 
     uint8_t* starter = new uint8_t[PAGE_SIZE];
-    fseek(input, (long) PAGE_SIZE * (enter_point_ / nodes_per_page_ + 1), SEEK_SET);
+    fseek(input, (long) PAGE_SIZE * (layout_.enter_point / layout_.nodes_per_page + 1), SEEK_SET);
     fread((char*) starter, sizeof(char), PAGE_SIZE, input);
 
     fclose(input);
@@ -723,7 +708,7 @@ namespace gustann {
     auto loader = create_spdk_loader(ssds, mini_batch * ctx_per_thread, stream_cnt,
                stream_cnt * ctx_per_thread);
 #elif USE_IO == BACKEND_MEM
-    auto loader = create_mem_loader_sync(fpath_.c_str(), num_pages_);
+    auto loader = create_mem_loader_sync(fpath_.c_str(), layout_.num_pages);
 #else
 #error "Wrong USE_IO Settings!"
 #endif
@@ -750,10 +735,10 @@ namespace gustann {
       int tot_task = 0;
       std::vector<TaskRunner> tasks;
       for (int i = 0; i < ctx_per_thread; i++) {
-        tasks.emplace_back(threadid, threadid * ctx_per_thread + i, mini_batch, num_dims_,
-                           topk, num_data_, max_m0_, ef_search,
-                           enter_point_, starter, pq,
-                           nodes_per_page_, node_size_, data_size_,
+        tasks.emplace_back(threadid, threadid * ctx_per_thread + i, mini_batch, layout_.num_dims,
+                           topk, layout_.num_data, layout_.max_m0, ef_search,
+                           layout_.enter_point, starter, pq,
+                           layout_.nodes_per_page, layout_.node_size, layout_.data_size,
                            loader,
                            &nav_graph);
       }
@@ -777,7 +762,7 @@ namespace gustann {
                   }
                 }
 #endif
-                task.init_query(qdata + (int64_t) qstart * num_dims_, qcnt,
+                task.init_query(qdata + (int64_t) qstart * layout_.num_dims, qcnt,
                                 nns + qstart * topk,
                                 distances + qstart * topk,
                                 found_cnt + qstart,

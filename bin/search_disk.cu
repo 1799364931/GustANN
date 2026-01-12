@@ -13,7 +13,13 @@ int main(int argc, char **argv) {
   spdlog::set_level(spdlog::level::info);
 
   argparse::ArgumentParser program("search_disk");
+#ifdef _USE_BAM
   gustann::BaMConfig config;
+  config.num_page = 16384;
+  config.num_ctrls = 5;
+  config.num_queues = 135;
+#endif
+  
   bool copy_data = false;
   bool only_copy = false;
   std::string query_file ;
@@ -25,23 +31,20 @@ int main(int argc, char **argv) {
   std::string data_type = "uint8";
 #endif
   
-  config.num_page = 16384;
-  config.num_ctrls = 5;
-  config.num_queues = 135;
-
   int topk = 100;
   int ef_search = 300;
 
   int thread, batch, ctx_per_thread;
   std::string pq_data;
   int repeat = 20; // FIXME: repeat value cannot be too small???
-  gustann::GustANN::Config search_config;
+  gustann::Config search_config;
 
   std::string ssd_list_file;
 
 #ifdef USE_BAM
   program.add_argument("--num_ctrls").store_into(config.num_ctrls);
   program.add_argument("--copy_data").store_into(copy_data);
+  program.add_argument("--cache_page").store_into(config.num_page);
 #endif
   program.add_argument("--query").required().store_into(query_file);
   program.add_argument("--index").required().store_into(index_file);
@@ -49,7 +52,6 @@ int main(int argc, char **argv) {
   //program.add_argument("--data_type").store_into(data_type);
   program.add_argument("--topk").store_into(topk);
   program.add_argument("--ef_search").store_into(ef_search);
-  program.add_argument("--cache_page").store_into(config.num_page);
   program.add_argument("--copy_only").store_into(only_copy);
 #ifdef HYBRID_CALC
   program.add_argument("--minibatch", "-B").required().store_into(batch);
@@ -71,7 +73,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  INFO("Num ctlrs: {}, Copy Data: {}, Query File: {}, Index File: {}, Ground Truth file: {}, Data Type: {}, topk: {}, ef_search: {}", config.num_ctrls, copy_data, query_file, index_file, gt_file, data_type, topk, ef_search);
+  INFO("Copy Data: {}, Query File: {}, Index File: {}, Ground Truth file: {}, Data Type: {}, topk: {}, ef_search: {}", copy_data, query_file, index_file, gt_file, data_type, topk, ef_search);
 
   std::fstream stream(ssd_list_file);
   if (stream) {

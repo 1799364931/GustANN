@@ -1,6 +1,8 @@
 #pragma once
 #include <sstream>
 
+#include <sys/time.h>
+
 #define SPDLOG_EOL ""
 #define SPDLOG_TRACE_ON
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
@@ -16,18 +18,35 @@
 
 
 namespace gustann {
-  struct BaMConfig {
-    int num_ctrls = 1;
-    int queue_depth = 1024;
-    int num_queues = 1;
-    int cuda_device = 0;
-    int nvm_namespace = 1;
-    int page_size = 4096;
-    int num_page = 1024; // cached page
-    bool use_simple_cache = false;
-  };
+
   enum DataType {
     FLOAT,
     UINT8,
   };
+  enum DistFunc {
+    L2,
+  };
+
+  struct Config {
+    std::string nav_data = "";
+    int warmup_batch = 0;
+    std::vector<std::string> ssd_list;
+  };
+
+  static double elapsed() {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return tv.tv_sec + tv.tv_usec * 1e-6;
+  }
+
+  
+  static void bind_core(int core_num) {
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    CPU_SET(core_num, &set);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set) != 0) {
+      perror("pthread_setaffinity_np");
+      exit(-1);
+    }
+  }
 }
