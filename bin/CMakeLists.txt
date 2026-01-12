@@ -14,8 +14,7 @@ add_executable(search_disk_hybrid search_disk.cu
 )
 target_include_directories(search_disk_hybrid PRIVATE ${HYBRID_INCLUDE_LIBRARY})
 target_link_libraries(search_disk_hybrid PRIVATE ${HYBRID_LINK_LIBRARY})
-target_include_directories(search_disk_hybrid PRIVATE ../spdk)
-target_link_libraries(search_disk_hybrid PRIVATE spdk_io)
+target_link_libraries(search_disk_hybrid PRIVATE index_loader)
 target_compile_options(search_disk_hybrid
   PRIVATE "-DASYNC_READ"
   PRIVATE "-lineinfo"
@@ -24,12 +23,10 @@ target_compile_options(search_disk_hybrid
 
 add_executable(search_disk_hybrid_float search_disk.cu
   ../src/log.cc ../src/ssd_search.cu ../src/ssd_search_kernel_hybrid.cu ../src/pq_search.cu ../src/ssd_search_hybrid.cu ../src/nav_graph.cu
-  ../src/io/mem_io.cpp
 )
 target_include_directories(search_disk_hybrid_float PRIVATE ${HYBRID_INCLUDE_LIBRARY})
 target_link_libraries(search_disk_hybrid_float PRIVATE ${HYBRID_LINK_LIBRARY})
-target_include_directories(search_disk_hybrid_float PRIVATE ../spdk)
-target_link_libraries(search_disk_hybrid_float PRIVATE spdk_io)
+target_link_libraries(search_disk_hybrid_float PRIVATE index_loader)
 target_compile_options(search_disk_hybrid_float
   PRIVATE "-DASYNC_READ"
   PRIVATE "-lineinfo"
