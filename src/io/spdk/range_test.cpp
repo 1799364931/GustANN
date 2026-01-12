@@ -1,8 +1,14 @@
-#include "spdk/env.h"
-#include "spdk_io.hpp"
 #include <cstdlib>
 #include <thread>
+#include <vector>
+#include <string>
 #include <sys/time.h>
+
+#include "spdk/env.h"
+#ifdef PAGE_SIZE
+#undef PAGE_SIZE
+#endif
+#include "../interface.hpp"
 
 #include "zipf.hpp"
 
@@ -26,7 +32,6 @@ static double elapsed() {
 
 
 int main() {
-  auto spdk = SpdkIO::create();
   std::vector<std::string> ssds = {
     "0000:8b:00.0",    
     //"0000:8c:00.0",
@@ -42,7 +47,7 @@ int main() {
   const int range = 100 * 1024 * 1024 / 4;
   const int base = 0;
   const int BATCH_SIZE = 1024;
-  spdk->init(ssds, BATCH_SIZE * ctx_per_thread, thread_cnt, ctx_per_thread * thread_cnt);
+  auto spdk = gustann::create_spdk_loader(ssds, BATCH_SIZE * ctx_per_thread, thread_cnt, ctx_per_thread * thread_cnt);
   
   
   auto worker = [&](int threadid) {
@@ -71,7 +76,7 @@ int main() {
       while(tot_req < target_req) {        
         for (int i = 0; i < ctx_per_thread && tot_req < target_req; i++) {
           int cid = threadid * ctx_per_thread + i;
-          if(spdk->check_ready(cid)) {
+          if(spdk->poll_task(cid)) {
             tot_req++;
             double start = elapsed();
             c++;
@@ -83,7 +88,7 @@ int main() {
               if (!(0 <= r && r < range)) throw;
               req.emplace_back(r, buffer[i] + j * PG_SIZE);
             }
-            spdk->push_queue(req, threadid, cid);
+            spdk->submit_task(req, threadid, cid);
             double end = elapsed();
             tot += end - start;
           }
@@ -95,9 +100,9 @@ int main() {
       printf("[REPORT] range %d time %lf bw %lf\n", range, end - start, (double) tot_req * BATCH_SIZE * 4 / (end - start) / 1024 / 1024);
       for (int i = 0; i < ctx_per_thread; i++) {
         int cid = threadid * ctx_per_thread + i;
-        while(!spdk->check_ready(cid));
+        while(!spdk->poll_task(cid));
       }
-      spdk->print_stats({0.5, 0.9, 0.99});
+      spdk->log_latency({0.5, 0.9, 0.99});
       spdk->clear_stats();
     }
   };

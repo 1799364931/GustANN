@@ -26,7 +26,6 @@
 #include "ssd_search.hpp"
 #include "ssd_search_kernel.hpp"
 
-#include "spdk_io.hpp"
 #include "spdk/env.h"
 #ifdef PAGE_SIZE
 #undef PAGE_SIZE
@@ -178,11 +177,7 @@ namespace gustann {
     uint8_t* buffer_dev;
     int32_t* request_dev;
 #endif
-#if USE_IO == BACKEND_SPDK
-    std::shared_ptr<SpdkIO> spdk;
-#elif USE_IO == BACKEND_MEM
     std::shared_ptr<IndexLoader> loader;
-#endif
     
     enum {
       Q_INIT,
@@ -466,11 +461,7 @@ namespace gustann {
       //printf("%d\n", qcnt);
       //uring.read_pages(threadid, pages);
 
-#if USE_IO == BACKEND_SPDK
-      spdk->push_queue(pages, tid, cid);
-#elif USE_IO == BACKEND_MEM
       loader->submit_task(pages, tid, cid);
-#endif
 
 #ifdef LOAD_PROBE
       std::sort(ssd_cnt.begin(), ssd_cnt.end());
@@ -577,11 +568,7 @@ namespace gustann {
         break;
       }
       case Q_SSD: {
-#if USE_IO == BACKEND_SPDK
-        bool ready = spdk->check_ready(cid);
-#elif USE_IO == BACKEND_MEM
         bool ready = loader->poll_task(cid);
-#endif
         if (ready) {
 
           //printf("!!!! SSD->GPU \n");
@@ -601,11 +588,7 @@ namespace gustann {
                int _topk, int _num_data, int _max_m0, int _ef_search,
                int _enter_point, uint8_t* _starter, PQSearch *_pq,
                int nodes_per_page, int node_size, int data_size,
-#if USE_IO == BACKEND_SPDK
-               std::shared_ptr<SpdkIO> _spdk,
-#elif USE_IO == BACKEND_MEM
                std::shared_ptr<IndexLoader> _loader,
-#endif
                NavGraph* _nav_graph) {
 
       tid = _tid;
@@ -626,11 +609,7 @@ namespace gustann {
       nodes_per_page_ = nodes_per_page;
       node_size_ = node_size;
       data_size_ = data_size;
-#if USE_IO == BACKEND_SPDK
-      spdk = _spdk;
-#elif USE_IO == BACKEND_MEM
       loader = _loader;
-#endif
 
       nav_graph = _nav_graph;
 
@@ -736,16 +715,15 @@ namespace gustann {
     
     std::atomic<int> tot_reads(0);
 #if USE_IO == BACKEND_SPDK
-    auto spdk = SpdkIO::create();
     std::vector<std::string> ssds = config.ssd_list;
     if (ssds.empty()) {
       fprintf(stderr, "NO SSD IN USE!\n");
       throw;
     }
-    spdk->init(ssds, mini_batch * ctx_per_thread, stream_cnt,
+    auto loader = create_spdk_loader(ssds, mini_batch * ctx_per_thread, stream_cnt,
                stream_cnt * ctx_per_thread);
 #elif USE_IO == BACKEND_MEM
-    std::shared_ptr<IndexLoader> mem_io = create_mem_loader_sync(fpath_.c_str(), num_pages_);
+    auto loader = create_mem_loader_sync(fpath_.c_str(), num_pages_);
 #else
 #error "Wrong USE_IO Settings!"
 #endif
@@ -776,11 +754,7 @@ namespace gustann {
                            topk, num_data_, max_m0_, ef_search,
                            enter_point_, starter, pq,
                            nodes_per_page_, node_size_, data_size_,
-#if USE_IO == BACKEND_BACKEND
-                           spdk,
-#else
-                           mem_io,
-#endif                           
+                           loader,
                            &nav_graph);
       }
       double t0 = elapsed();

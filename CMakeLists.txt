@@ -22,6 +22,13 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CUDA_ARCHITECTURES "70;80;90")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(GUSTANN_USE_BAM "Enable BaM support" OFF)
+option(GUSTANN_USE_SPDK "Enable SPDK (Storage Performance Development Kit) support" ON)
+
+if (GUSTANN_USE_SPDK)
+  add_compile_definitions(USE_SPDK)
+endif()
+
 # If you set any CMAKE_ variables, that can go here.
 # (But usually don't do this, except maybe for C++ standard)
 
@@ -34,7 +41,7 @@ add_subdirectory(deps/spdlog)
 # add_subdirectory(deps/bam)
 add_subdirectory(deps/argparse)
 
-add_subdirectory(spdk/)
-#add_subdirectory(src/)
+#add_subdirectory(spdk/)
+add_subdirectory(src/io)
 add_subdirectory(bin/)
 

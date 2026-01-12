@@ -1,6 +1,6 @@
 find_package(PkgConfig REQUIRED)
 
-set(SPDK_PATH "../deps/spdk")
+set(SPDK_PATH "${CMAKE_SOURCE_DIR}/deps/spdk")
 set(ENV{PKG_CONFIG_PATH} "${SPDK_PATH}/build/lib/pkgconfig")
 
 execute_process(

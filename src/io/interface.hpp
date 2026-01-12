@@ -21,6 +21,12 @@ namespace gustann {
   };
 
   std::shared_ptr<IndexLoader> create_mem_loader_sync(const char* filename, int64_t num_pages);
-  
+
+#ifdef USE_SPDK
+  std::shared_ptr<IndexLoader>
+  create_spdk_loader(const std::vector<std::string> &ssds, int queue_cap,
+                     int thread_cnt, int ctx_cnt
+  );
+#endif
 } // namespace gustann
 
