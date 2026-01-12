@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
+#include <map>
 
 #include <sys/time.h>
 
@@ -27,8 +28,15 @@
 
 #include "spdk_io.hpp"
 #include "spdk/env.h"
-#include <map>
+#ifdef PAGE_SIZE
 #undef PAGE_SIZE
+#endif
+
+
+#include "io/interface.hpp"
+
+
+
 
 static double elapsed() {
   struct timeval tv;
@@ -61,7 +69,6 @@ static void bind_core(int core_num) {
 
 namespace gustann {
   static std::string fpath_;
-  const int PAGE_SIZE = 4096;
   void GustANN::init_hybrid(const std::string& fpath) {
     search_type = HYBRID;
     parse_diskann_metadata(fpath);
@@ -133,34 +140,6 @@ namespace gustann {
     }
   }
 
-  // Make a naiive fully synchornous memcpy for simplexity
-  // TODO: Avoid DRAM memcpy (using cudaMemcpyAsync) while enabling selective transfer
-  struct MemIOSync {
-    uint8_t* index;
-    MemIOSync(const char* filename, int64_t num_pages) {
-      FILE* file = fopen(filename, "rb");
-      index = new uint8_t [num_pages * PAGE_SIZE];
-      fseek(file, PAGE_SIZE, SEEK_SET);
-      int64_t ret = fread(index, PAGE_SIZE, num_pages, file);
-      if (ret != num_pages) {
-        printf("Mem Index Load FAILED!\n");
-        printf("%ld %ld\n", ret, num_pages);
-        throw;
-      }
-      fclose(file);
-      printf("Mem Index Loaded!\n");
-    }
-    void send_requests(const std::vector<std::pair<int, void*>>& pages, int tid, int cid) {
-      for (auto [blk, dst] : pages) {
-        memcpy(dst, index + (int64_t) blk * PAGE_SIZE, PAGE_SIZE);
-      }
-    }
-    bool check_ready(int) {
-      return true;
-    }
-  };
-
-  
   struct TaskRunner {
 
     float* d_qdata; // (mini_batch * num_dims_);
@@ -202,7 +181,7 @@ namespace gustann {
 #if USE_IO == BACKEND_SPDK
     std::shared_ptr<SpdkIO> spdk;
 #elif USE_IO == BACKEND_MEM
-    std::shared_ptr<MemIOSync> mem_io;
+    std::shared_ptr<IndexLoader> loader;
 #endif
     
     enum {
@@ -490,7 +469,7 @@ namespace gustann {
 #if USE_IO == BACKEND_SPDK
       spdk->push_queue(pages, tid, cid);
 #elif USE_IO == BACKEND_MEM
-      mem_io->send_requests(pages, tid, cid);
+      loader->submit_task(pages, tid, cid);
 #endif
 
 #ifdef LOAD_PROBE
@@ -601,7 +580,7 @@ namespace gustann {
 #if USE_IO == BACKEND_SPDK
         bool ready = spdk->check_ready(cid);
 #elif USE_IO == BACKEND_MEM
-        bool ready = mem_io->check_ready(cid);
+        bool ready = loader->poll_task(cid);
 #endif
         if (ready) {
 
@@ -625,7 +604,7 @@ namespace gustann {
 #if USE_IO == BACKEND_SPDK
                std::shared_ptr<SpdkIO> _spdk,
 #elif USE_IO == BACKEND_MEM
-               std::shared_ptr<MemIOSync> _memio,
+               std::shared_ptr<IndexLoader> _loader,
 #endif
                NavGraph* _nav_graph) {
 
@@ -650,7 +629,7 @@ namespace gustann {
 #if USE_IO == BACKEND_SPDK
       spdk = _spdk;
 #elif USE_IO == BACKEND_MEM
-      mem_io = _memio;
+      loader = _loader;
 #endif
 
       nav_graph = _nav_graph;
@@ -766,7 +745,7 @@ namespace gustann {
     spdk->init(ssds, mini_batch * ctx_per_thread, stream_cnt,
                stream_cnt * ctx_per_thread);
 #elif USE_IO == BACKEND_MEM
-    std::shared_ptr<MemIOSync> mem_io = std::make_shared<MemIOSync>(fpath_.c_str(), num_pages_);
+    std::shared_ptr<IndexLoader> mem_io = create_mem_loader_sync(fpath_.c_str(), num_pages_);
 #else
 #error "Wrong USE_IO Settings!"
 #endif
