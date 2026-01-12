@@ -20,7 +20,7 @@
 //#include "ssd_io.hpp"
 
 #include "common.hpp"
-#include "log.hpp"
+#include "common_cuda.cuh"
 
 #include "nav_graph.hpp"
 #include "ssd_search.hpp"
@@ -73,7 +73,7 @@ namespace gustann {
     parse_diskann_metadata(fpath);
 
     fpath_ = fpath;
-    DEBUG0("Initialization finished");
+    DEBUG("Initialization finished");
   }
   using ::checkCuda;
 
@@ -734,7 +734,7 @@ namespace gustann {
     const std::string nav_data_file = config.nav_data + "/"+ "nav_index.data";
     const std::string nav_map_file = config.nav_data + "/" + "map.txt";
 
-    INFO0("Use small navigation graph!");
+    INFO("Use small navigation graph!");
     nav_graph.init(nav_index_file, nav_data_file, nav_map_file);
 #endif
 
@@ -895,7 +895,7 @@ namespace gustann {
     }
     CHECK_CUDA(cudaDeviceSynchronize());
     double end = elapsed();
-    DEBUG0("End Search");
+    DEBUG("End Search");
     INFO("Use time: {}", end - start);
     INFO("Total reads: {}", tot_reads.load());
     REPORT("Time %lf", end - start);

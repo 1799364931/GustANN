@@ -1,5 +1,5 @@
-#pragma once 
-#include "log.hpp"
+#pragma once
+#include "common.h"
 #include <page_cache.h>
 
 using cuda_scalar = float;
@@ -26,7 +26,9 @@ struct BaMContext {
 } bam_data;
 
 inline void init_bam(long num_eles) {
-  auto logger_ = CuHNSWLogger().get_logger();
+  spdlog::set_pattern("[%^%-8l%$] %Y-%m-%d %H:%M:%S [%s:%#] %v");
+  spdlog::set_level(spdlog::level::info);
+
   for (int i = 0; i < bam_config.num_ctrls; i++) {
     bam_data.ctrls.push_back
       (new Controller(ctrls_paths[i],

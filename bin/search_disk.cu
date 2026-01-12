@@ -1,5 +1,5 @@
 #include "ssd_search.hpp"
-#include "log.hpp"
+#include "spdlog/spdlog.h"
 #include <set>
 #include "utils.hpp"
 #include "pq_search.hpp"
@@ -8,9 +8,9 @@
 
 std::shared_ptr<spdlog::logger> logger_ = nullptr;
 
-int main(int argc, char** argv) {  
-  logger_ = CuHNSWLogger().get_logger();
-  CuHNSWLogger().set_log_level(3);
+int main(int argc, char **argv) {
+  spdlog::set_pattern("[%^%-8l%$] %Y-%m-%d %H:%M:%S [%s:%#] %v");
+  spdlog::set_level(spdlog::level::info);
 
   argparse::ArgumentParser program("search_disk");
   gustann::BaMConfig config;
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
   } else if (data_type == "uint8") {
     dtype = gustann::UINT8;
   } else {
-    CRITICAL("unrecognized data type {}", data_type);
+    ERROR("unrecognized data type {}", data_type);
     exit(-1);
   }
   
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
   }
   if (only_copy) return 0;
   
-  DEBUG("Read {} queries", nq);
+  INFO("Read {} queries", nq);
 
   if (true) {
     int rep = repeat;

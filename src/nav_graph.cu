@@ -1,5 +1,6 @@
 #include "nav_graph.hpp"
 #include "common.hpp"
+#include "common_cuda.cuh"
 #include <cassert>
 #include <algorithm>
 

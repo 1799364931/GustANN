@@ -1,4 +1,4 @@
-#include "log.hpp"
+#pragma once
 #ifdef _USE_BAM
 #include "page_cache.h"
 #include "page_manager.hpp"
@@ -30,7 +30,6 @@ class GustANN {
   int max_m0_;
   int64_t enter_point_;
   int64_t num_pages_;
-  std::shared_ptr<spdlog::logger> logger_;
 
   uint64_t nodes_per_page_;
   uint64_t node_size_;

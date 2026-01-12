@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "common.hpp"
 
 namespace gustann {
   // Make a naiive fully synchornous memcpy for simplexity
@@ -13,19 +14,19 @@ namespace gustann {
     MemLoaderSync(const char* filename, int64_t num_pages) {
       FILE *file = fopen(filename, "rb");
       if (!file) {
-        printf("Faile to open Mem Index");
+        ERROR("Faile to open Mem Index");
         exit(-1);
       }
       index = new uint8_t [num_pages * PAGE_SIZE];
       fseek(file, PAGE_SIZE, SEEK_SET);
       int64_t ret = fread(index, PAGE_SIZE, num_pages, file);
       if (ret != num_pages) {
-        printf("Mem Index Load FAILED!\n");
-        printf("%ld %ld\n", ret, num_pages);
+        ERROR("Mem Index Load FAILED!\n");
+        DEBUG("%ld %ld\n", ret, num_pages);
         exit(-1);
       }
       fclose(file);
-      printf("Mem Index Loaded!\n");
+      INFO("Mem Index Loaded!\n");
     }
     void submit_task(const std::vector<IoRequest>& pages, int, int) override {
       for (auto [blk, dst] : pages) {

@@ -1,17 +1,15 @@
 #include "pq_search.hpp"
 #include <fstream>
 
-#include "log.hpp"
 #include "common.hpp"
-
-static std::shared_ptr<spdlog::logger> logger_ = CuHNSWLogger().get_logger();
+#include "common_cuda.cuh"
 
 template <class T>
 static void read_bin(std::string file, int &npts, int &ndim, size_t offset,
                      T *&data);
 
 void PQSearch::read_data(std::string table_file, std::string vec_file) {
-  DEBUG0("Reading Compressed data");
+  DEBUG("Reading Compressed data");
   read_bin(vec_file, host_data.num_pts, host_data.num_chunks, 0, host_data.compressed_data);
   /*
   if (host_data.num_chunks % 4 != 0) {
@@ -28,12 +26,12 @@ void PQSearch::read_data(std::string table_file, std::string vec_file) {
   size_t* basic_offsets;
   int nr, nc;
   // read data from file
-  DEBUG0("Reading metadata");
+  DEBUG("Reading metadata");
   read_bin(table_file, nr, nc, 0, basic_offsets);
   ASSERT(nr == 4 && nc == 1);
   DEBUG("Metadata: {} {} {} {}", basic_offsets[0], basic_offsets[1], basic_offsets[2], basic_offsets[3]);
 
-  DEBUG0("Reading pivots");
+  DEBUG("Reading pivots");
   read_bin(table_file, nr, host_data.dim, basic_offsets[0], host_data.pivots);
   ASSERT(nr == host_data.num_pivots);
   host_data.pivots_t = new float[(size_t) host_data.num_pivots * host_data.dim];
@@ -42,11 +40,11 @@ void PQSearch::read_data(std::string table_file, std::string vec_file) {
       host_data.pivots_t[j * host_data.num_pivots + i] = host_data.pivots[i * host_data.dim + j];
     }
   }
-  DEBUG0("Reading centroid");
+  DEBUG("Reading centroid");
   read_bin(table_file, nr, nc, basic_offsets[1], host_data.centroid);
   ASSERT(nr == host_data.dim && nc == 1);
 
-  DEBUG0("Reading chunk offsets");
+  DEBUG("Reading chunk offsets");
   int* chunk_offsets;
   read_bin(table_file, nr, nc, basic_offsets[2], chunk_offsets);
   ASSERT(nr == host_data.num_chunks + 1 && nc == 1);
@@ -105,9 +103,9 @@ void PQSearch::init_device(int dim, int num_pts, int num_thread_blocks, int ef_s
   //CHECK_CUDA(cudaMalloc(&device_data.pq_retset, sizeof(PQData) * num_thread_blocks * ef_search));
   
   
-  DEBUG0("F");
+  DEBUG("F");
   copy_to_dev(&device_data, device_ptr, 1);
-  DEBUG0("PQ data moved to device");
+  DEBUG("PQ data moved to device");
 
 #ifdef MEM_PROFILE
   CHECK_CUDA(cudaMemGetInfo(&free_mem, &tot_mem));
@@ -120,8 +118,8 @@ template<class T>
 static void read_bin(std::string filename, int& npts, int& ndim, size_t offset, T* &data) {
   std::ifstream ifile(filename);
   if (!ifile.is_open()) {
-    CRITICAL("Cannot open file: {}", filename);
-    return;
+    ERROR("Cannot open file: {}", filename);
+    exit(-1);
   }
   ifile.seekg(offset, std::ios::beg);
   ifile.read((char*)&npts, sizeof(int));

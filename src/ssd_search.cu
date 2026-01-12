@@ -17,7 +17,7 @@
 
 
 #include "common.hpp"
-#include "log.hpp"
+#include "common_cuda.cuh"
 #include "ssd_search.hpp"
 #include "ssd_search_kernel.hpp"
 
@@ -49,7 +49,7 @@ namespace gustann {
   }
 
   __global__ void copy_page_to_ssd(Controller** ctrls, page_cache_d_t* pc, uint64_t n_ctrls, uint8_t* src, size_t start_lba, size_t len, size_t page_size) {
-    #ifdef ASYNC_READ
+#ifdef ASYNC_READ
     uint64_t cache_pages = pc->n_pages;
     
     
@@ -113,8 +113,6 @@ namespace gustann {
     visited_list_size_ = 8192 * 8;
     visited_table_size_ = visited_list_size_ * 2;
     data_type_ = data_type;
-
-    logger_ = CuHNSWLogger().get_logger();
   }
 
   void GustANN::init_bam_(const BaMConfig &config, int64_t ssd_pages) {
@@ -137,11 +135,11 @@ namespace gustann {
     DEBUG("Data page: {}", ssd_pages);
     
     bam_data_.h_pc = new page_cache_t(config.page_size,
-                                     num_pages,
-                                     config.cuda_device,
-                                     bam_data_.ctrls[0][0],
-                                     64,
-                                     bam_data_.ctrls);
+                                      num_pages,
+                                      config.cuda_device,
+                                      bam_data_.ctrls[0][0],
+                                      64,
+                                      bam_data_.ctrls);
     int64_t data_size = ssd_pages * config.page_size;
 
     page_size_ = config.page_size;
@@ -161,9 +159,9 @@ namespace gustann {
       bam_data_.a = new array_t<uint8_t> (data_size, 0, bam_data_.vr, config.cuda_device);
     }
     
-    DEBUG0("Inited BaM device");
+    INFO("Inited BaM device");
 #else
-    CRITICAL0("Not Implemented!\n");
+    ERROR("Not Implemented!\n");
     throw;
 #endif
   }
@@ -174,14 +172,14 @@ namespace gustann {
   void GustANN::parse_diskann_metadata(const std::string& fpath) {
     std::ifstream input(fpath, std::ios::binary);
     if (!input.is_open()) {
-      CRITICAL("Failed to open file {}", fpath);
+      ERROR("Failed to open file {}", fpath);
       exit(-1);
     }
     
-    DEBUG("load DiskANN index from {}", fpath);
+    INFO("load DiskANN index from {}", fpath);
     
     // reqd meta values
-    DEBUG0("read meta values");
+    DEBUG("read meta values");
     
     // from: https://github.com/microsoft/DiskANN/blob/main/src/pq_flash_index.cpp#L1043
     
@@ -216,19 +214,19 @@ namespace gustann {
     
     READ_U64(input, _reorder_data_exists);
     
-    DEBUG("meta values loaded, num_data: {}, num_dims: {}, max_m0: {}, enter_point: {}",
-          num_data_, num_dims_, max_m0_, enter_point_);
+    INFO("meta values loaded, num_data: {}, num_dims: {}, max_m0: {}, enter_point: {}",
+         num_data_, num_dims_, max_m0_, enter_point_);
 
     nodes_per_page_ = _nnodes_per_sector;
     num_pages_ = (num_data_ + nodes_per_page_ - 1) / nodes_per_page_;
     node_size_ = _max_node_len;
     data_size_ = _disk_bytes_per_point;
 
-    DEBUG("node size: {}, data size: {}, nodes_per_page: {}, tot_pages: {}",
-          node_size_,
-          data_size_,
-          nodes_per_page_,
-          num_pages_);
+    INFO("node size: {}, data size: {}, nodes_per_page: {}, tot_pages: {}",
+         node_size_,
+         data_size_,
+         nodes_per_page_,
+         num_pages_);
   }
 
   void GustANN::copy_to_bam(const std::string& fpath) {
@@ -243,12 +241,12 @@ namespace gustann {
     uint64_t copy_pages = copy_block_cnt * copy_batch; // 100MB
 
     /*
-    {
+      {
       input.seekg(0, std::ios::end);      
       auto pos = input.tellg();
       uint64_t len = pos;
       DEBUG("Len: {}", len);
-    }
+      }
     */
     CHECK_CUDA(cudaMallocHost(&buff, page_size_ * copy_pages));
     fseek(input, page_size_, SEEK_SET);
@@ -278,10 +276,10 @@ namespace gustann {
       }
       CHECK_CUDA(cudaDeviceSynchronize());
       /*
-      if (i <= 159494 && 159494 < i + block_cnt_) {
+        if (i <= 159494 && 159494 < i + block_cnt_) {
         int a = 159494 - i;
         printf("%d\n", *(int*)(buff + a * 4096 + 128 * 4));
-      }
+        }
       */
     }
     DEBUG("{} {}", tot_cnt, num_pages_);
@@ -294,7 +292,7 @@ namespace gustann {
     DEBUG("finish copy, bandwidth = {} GB/s", 1. * num_pages_ * page_size_ / 1024 / 1024 / 1024 / (end - start));
     fclose(input);
 #else
-    CRITICAL0("Not Implemented!\n");
+    ERROR("Not Implemented!\n");
     throw;
 #endif
   }
@@ -312,7 +310,7 @@ namespace gustann {
 #ifdef _USE_MEM
     read_to_mem(fpath);
 #endif
-    DEBUG0("Initialization finished");
+    DEBUG("Initialization finished");
   }
 
 #ifdef _USE_BAM
@@ -336,8 +334,8 @@ namespace gustann {
   }
   
   void GustANN::search(const float *qdata, const int num_queries_, const int topk,
-                      const int ef_search, int *nns, float *distances, int *found_cnt,
-                      const Config& config, PQSearch* pq) {
+                       const int ef_search, int *nns, float *distances, int *found_cnt,
+                       const Config& config, PQSearch* pq) {
 #ifdef _USE_BAM
 #if 0
     int num_queries = num_queries_;
@@ -365,7 +363,7 @@ namespace gustann {
     thrust::device_vector<float> d_cand_distances(ef_search * block_cnt_);
 
     thrust::copy(entries.begin(), entries.end(), d_entries.begin());
-    DEBUG0("Start Search");
+    DEBUG("Start Search");
 
     //fetch_all_data<<<1, 32>>>(bam_data_.a->d_array_ptr, num_pages_);
                                                
@@ -417,16 +415,16 @@ namespace gustann {
        const int num_nodes, const int num_dims, const int max_m,
        const int ef_search, const int entry, int* result,
        uint32_t* neighbor_id, float* neighbor_dist
-       );
+      );
 
     __global__ void search_disk_graph_kernel2
-    (DiskData* data, float* qdata, const int num_dims,
-     PQSearchData* pq_data,
-     int nodes_per_page, int node_len, int data_len,
-     int* entries,
-     const int max_m, const int ef_search, const int topk,
-     int* nns, float* distances, int* found_cnt,
-     int qcnt);
+      (DiskData* data, float* qdata, const int num_dims,
+       PQSearchData* pq_data,
+       int nodes_per_page, int node_len, int data_len,
+       int* entries,
+       const int max_m, const int ef_search, const int topk,
+       int* nns, float* distances, int* found_cnt,
+       int qcnt);
 
     int num_queries = num_queries_;
     //num_queries = 10;
@@ -436,7 +434,7 @@ namespace gustann {
     const std::string nav_data_file = config.nav_data + "/"+ "nav_index.data";
     const std::string nav_map_file = config.nav_data + "/" + "map.txt";
 
-    INFO0("Use small navigation graph!");
+    INFO("Use small navigation graph!");
     nav_graph.init(nav_index_file, nav_data_file, nav_map_file);
     
     thrust::device_vector<float> d_qdata(num_queries * num_dims_);
@@ -452,7 +450,7 @@ namespace gustann {
     thrust::device_vector<float> d_neighbors_dist(aligned_ef * block_cnt_);
 
 
-    DEBUG0("Start Search");
+    DEBUG("Start Search");
 
     //fetch_all_data<<<1, 32>>>(bam_data_.a->d_array_ptr, num_pages_);
     if (pq) pq->init_device(num_dims_, num_data_, block_cnt_, ef_search);                                               
@@ -470,7 +468,7 @@ namespace gustann {
        thrust::raw_pointer_cast(d_entries.data()),
        thrust::raw_pointer_cast(d_neighbors_id.data()),
        thrust::raw_pointer_cast(d_neighbors_dist.data())
-       );
+      );
 
     CHECK_CUDA(cudaDeviceSynchronize());
     std::vector<int> entries(num_queries);
@@ -482,30 +480,30 @@ namespace gustann {
 
     search_disk_graph_kernel2<<<
       block_cnt_, (max_m0_ + 31) / 32 * 32,
-      (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + max_m0_)
-                             >>>
+        (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + max_m0_)
+        >>>
       (
 #ifdef _USE_MEM
-       mem_data_,
+        mem_data_,
 #else
-       bam_data_.a->d_array_ptr,
+        bam_data_.a->d_array_ptr,
 #endif
-       thrust::raw_pointer_cast(d_qdata.data()),
-       num_dims_,
-       pq->get_device_ptr(),
-       nodes_per_page_, node_size_, data_size_,
-       thrust::raw_pointer_cast(d_entries.data()),
-       max_m0_, ef_search, topk,
-       thrust::raw_pointer_cast(d_nns.data()), 
-       thrust::raw_pointer_cast(d_distances.data()), 
-       thrust::raw_pointer_cast(d_found_cnt.data()), 
-       num_queries
-       );
+        thrust::raw_pointer_cast(d_qdata.data()),
+        num_dims_,
+        pq->get_device_ptr(),
+        nodes_per_page_, node_size_, data_size_,
+        thrust::raw_pointer_cast(d_entries.data()),
+        max_m0_, ef_search, topk,
+        thrust::raw_pointer_cast(d_nns.data()), 
+        thrust::raw_pointer_cast(d_distances.data()), 
+        thrust::raw_pointer_cast(d_found_cnt.data()), 
+        num_queries
+      );
     
     CHECK_CUDA(cudaDeviceSynchronize());
     double end = elapsed();
 
-    DEBUG0("End Search");
+    DEBUG("End Search");
     INFO("Use time: {}", end - start);
     std::vector<int64_t> acc_visited_cnt(block_cnt_);
     thrust::copy(d_nns.begin(), d_nns.end(), nns);
@@ -516,7 +514,7 @@ namespace gustann {
     bam_data_.a->print_reset_stats();
 #endif
 #else
-    CRITICAL0("Not Implemented!");
+    ERROR("Not Implemented!");
     throw;
 #endif
   }
