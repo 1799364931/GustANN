@@ -1,5 +1,5 @@
 //#include "cuda_utils_kernels.cuh"
-#include "cuda_base_kernels.cuh"
+#include "common_cuda.cuh"
 #include "ssd_search_kernel.hpp"
 
 #include "impl/pq.cuh"

@@ -3,7 +3,7 @@
 #ifdef CHECK_CUDA
 #undef CHECK_CUDA
 #endif
-
+#include <sstream>
 
 static constexpr int WARP_SIZE = 32;
 

@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "common.hpp"
+#include "../common.hpp"
 
 namespace gustann {
   // Make a naiive fully synchornous memcpy for simplexity
