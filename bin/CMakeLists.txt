@@ -16,7 +16,6 @@ target_include_directories(search_disk_hybrid PRIVATE ${HYBRID_INCLUDE_LIBRARY})
 target_link_libraries(search_disk_hybrid PRIVATE ${HYBRID_LINK_LIBRARY})
 target_link_libraries(search_disk_hybrid PRIVATE index_loader)
 target_compile_options(search_disk_hybrid
-  PRIVATE "-DASYNC_READ"
   PRIVATE "-lineinfo"
   PRIVATE "-DHYBRID_CALC"
 )
@@ -28,7 +27,6 @@ target_include_directories(search_disk_hybrid_float PRIVATE ${HYBRID_INCLUDE_LIB
 target_link_libraries(search_disk_hybrid_float PRIVATE ${HYBRID_LINK_LIBRARY})
 target_link_libraries(search_disk_hybrid_float PRIVATE index_loader)
 target_compile_options(search_disk_hybrid_float
-  PRIVATE "-DASYNC_READ"
   PRIVATE "-lineinfo"
   PRIVATE "-DHYBRID_CALC"
   PRIVATE "-DFLOAT_DATA"
@@ -48,7 +46,7 @@ IF(GUSTANN_USE_BAM)
   target_include_directories(search_disk PRIVATE ${APP_INCLUDE_LIBRARY})
   target_link_libraries(search_disk PRIVATE ${APP_LINK_LIBRARY})
   target_compile_options(search_disk
-    PRIVATE "-DASYNC_READ"
+    #PRIVATE "-DASYNC_READ"
     PRIVATE "-D_USE_BAM"
     PRIVATE "-lineinfo"
     PRIVATE "-O2"
