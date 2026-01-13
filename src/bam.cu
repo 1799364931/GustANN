@@ -19,7 +19,7 @@
 #include "impl/bam/def.cuh"
 #include "impl/bam/transfer.cuh"
 //#include "impl/bam/search_v1.cuh"
-#include "impl/bam/search_v2.cuh"
+#include "impl/bam/search.cuh"
 #include "impl/nav.cuh"
 
 
