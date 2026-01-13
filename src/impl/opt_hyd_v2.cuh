@@ -1,19 +1,5 @@
 namespace gustann {
 
-  __device__ int lower_bound(float* dist_arr, uint32_t* id_arr, int l, int r, float d, int x) {
-    x = x & 0x7fffffff;
-    while(l < r) {
-      int mid = (l + r) / 2;
-      if (dist_arr[mid] < d ||
-          (dist_arr[mid] == d && (id_arr[mid] & 0x7fffffff) < x)) {
-        l = mid + 1;
-      } else {
-        r = mid;
-      }
-    }
-    return l;
-  }
-  
   __global__ void __launch_bounds__(128, 14)
     merge_data_kernel
     (uint8_t *buffer, int32_t *request,

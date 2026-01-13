@@ -1,29 +1,13 @@
-#include "cuda_utils_kernels.cuh"
-#include "cuda_heap_kernels.cuh"
-#include "cuda_dist_kernels.cuh"
+#pragma once
 
+#include "def.cuh"
 #include "page_cache.h"
+#include "page_wrapper.cuh"
 
-#include "ssd_search_kernel.hpp"
-
-#include "impl/pq.cuh"
-#include "impl/calc.cuh"
-
-#include "impl/page_wrapper.cuh"
-
-
-
-
-using data_type = uint8_t;
-#include "impl/opt_hyd.cuh"
-#include "impl/opt_hyd_v2.cuh"
-#include "impl/nav.cuh"
-#include "impl/opt.cuh"
+#include "../pq.cuh"
+#include "../calc.cuh"
 
 namespace gustann {
-
-
-  
   template <class T>
   __inline__ __device__ void search_disk_graph_kernel_inner_with_pq
   (float* qdata, const int num_qnodes, DiskData* data,
@@ -149,7 +133,7 @@ namespace gustann {
             }
 #endif
             if (CheckVisited(_visited_table, _visited_list, visited_cnt, dstid, 
-                              visited_table_size, visited_list_size) ||
+                             visited_table_size, visited_list_size) ||
                 CheckAlreadyExists(ef_search_pq, size, dstid)) {
               continue;
             }
@@ -180,18 +164,18 @@ namespace gustann {
       __syncthreads();
       // get sorted neighbors
       /*
-      if (threadIdx.x == 0) {
+        if (threadIdx.x == 0) {
         int size2 = size;
         while (size > 0) {
-          if (size <= topk) {
-            nns[i * topk + size - 1] = ef_search_pq[0].nodeid;
-            distances[i * topk + size - 1] = ef_search_pq[0].distance;
-          }
-          //printf("%lf\n", distances[i * topk + size - 1]);
-          PqPop(ef_search_pq, &size);
+        if (size <= topk) {
+        nns[i * topk + size - 1] = ef_search_pq[0].nodeid;
+        distances[i * topk + size - 1] = ef_search_pq[0].distance;
+        }
+        //printf("%lf\n", distances[i * topk + size - 1]);
+        PqPop(ef_search_pq, &size);
         }
         found_cnt[i] = size2 < topk? size2: topk;
-      }
+        }
       */
       if (threadIdx.x == 0) found_cnt[i] = final_size;
       __syncthreads();
@@ -254,16 +238,16 @@ namespace gustann {
       
       // iterate until converge
       /*      
-      {
-        float* __ = pager.get_data(0, ctx0);
+              {
+              float* __ = pager.get_data(0, ctx0);
         
-        float res = square_sum(src_vec, __, num_dims);
-        if (threadIdx.x == 0) {
-          for (int i = 0; i < 10; i++) printf("%f ", __[i]);
-          printf("\n");
-        }
-        pager.drop(ctx0);
-      }
+              float res = square_sum(src_vec, __, num_dims);
+              if (threadIdx.x == 0) {
+              for (int i = 0; i < 10; i++) printf("%f ", __[i]);
+              printf("\n");
+              }
+              pager.drop(ctx0);
+              }
       */
       int idx = GetCand(ef_search_pq, size, false);
 
@@ -281,11 +265,11 @@ namespace gustann {
         ReadCtx ctx1;
 
         /*
-        int idx2 = GetCand(ef_search_pq, size, false);
-        if (idx2 >= 0) {
+          int idx2 = GetCand(ef_search_pq, size, false);
+          if (idx2 >= 0) {
           //if (blockIdx.x == 0 && threadIdx.x == 0)printf("%d %d\n", entry, ef_search_pq[idx2].nodeid);
           pager.prefetch(ef_search_pq[idx2].nodeid);
-        }
+          }
         */
         GraphData<T> graph = pager.get_graph<T>(entry, ctx1);
         //if (threadIdx.x == 0) printf("%d %d %d %d\n", i, entry, graph.deg, graph[0]);
@@ -424,7 +408,7 @@ namespace gustann {
           int dstid = graph[j];
 
           if (CheckVisited(_visited_table, _visited_list, visited_cnt, dstid, 
-                            visited_table_size, visited_list_size)) {
+                           visited_table_size, visited_list_size)) {
             continue;
           }
           __syncthreads();
@@ -487,7 +471,6 @@ namespace gustann {
        nns, distances, found_cnt, visited_table, visited_list,
        visited_table_size, visited_list_size, acc_visited_cnt,
        neighbors, nodes_per_page, node_len, data_len, pq
-       );
+      );
   }
-  } // namespace gustann
-
+}

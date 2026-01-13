@@ -1,4 +1,5 @@
-
+#include <algorithm>
+#include <numeric>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -13,117 +14,29 @@
 #include "common_cuda.cuh"
 #include "nav_graph.hpp"
 #include "bam.hpp"
-#include "ssd_search_kernel.hpp"
+//#include "ssd_search_kernel.hpp"
+
+#include "impl/bam/def.cuh"
+#include "impl/bam/transfer.cuh"
+//#include "impl/bam/search_v1.cuh"
+#include "impl/bam/search_v2.cuh"
+#include "impl/nav.cuh"
+
 
 
 namespace gustann {
 
   const char *const ctrls_paths[6] = {"/dev/libnvm0","/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4","/dev/libnvm5"};
 
-  // Helper Kernels
-  
-  template <class T>
-  __global__ void copy_data_to_ssd(array_d_t<T> *dest, T *src,
-                                   size_t len, size_t offset) {
-    uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-    uint64_t thread_num = blockDim.x * gridDim.x;
-    for (size_t i = tid; i < len; i += thread_num) {
-      (*dest)(i + offset, src[i]);
-    }
-  }
-
-  __global__ void copy_page_to_ssd(Controller **ctrls, page_cache_d_t *pc,
-                                   uint64_t n_ctrls,
-                                   uint8_t* src, size_t start_lba, size_t len, size_t page_size) {
-#ifdef ASYNC_READ
-    uint64_t cache_pages = pc->n_pages;
-    
-    
-    uint32_t batch_per_block = cache_pages / gridDim.x;
-    //if (blockIdx.x == 0 && threadIdx.x == 0) printf("%lu %lu %lu %u\n", start_lba, len, cache_pages, batch_per_block);
-    uint32_t fetch_head = 0, fetch_tail = 0;
-    
-    for (int i = blockIdx.x; i < len; i += gridDim.x) {
-      if (fetch_tail - fetch_head == batch_per_block) {
-        if (threadIdx.x == 0) {
-          uint32_t cache_idx = fetch_head % batch_per_block + batch_per_block * blockIdx.x;
-          write_data_await(pc->cache_pages[cache_idx].qp,
-                           &pc->cache_pages[cache_idx].ctx);
-        }
-        fetch_head++;
-      }
-      __syncthreads();
-      uint32_t cache_idx = (fetch_tail++) % batch_per_block + batch_per_block * blockIdx.x;
-      uint64_t* dest_p = (uint64_t *) (pc->base_addr + cache_idx * page_size);
-      uint64_t* src_p = (uint64_t *) (src + i * page_size);
-      for (int j = threadIdx.x; j < page_size / sizeof(uint64_t); j += blockDim.x) {
-        dest_p[j] = src_p[j];
-      }
-      __syncthreads();
-
-      if (threadIdx.x == 0) {
-        uint64_t dest_page = start_lba + i;
-        uint32_t ctrl = dest_page % n_ctrls;
-        uint32_t block = dest_page / n_ctrls;
-        uint32_t queue = ctrls[ctrl]->queue_counter.fetch_add(1, simt::memory_order_relaxed) %
-          (ctrls[ctrl]->n_qps);
-        
-        QueuePair *qp = &ctrls[ctrl]->d_qps[queue];
-        write_data_async(pc, qp, block * pc->n_blocks_per_page, pc->n_blocks_per_page,
-                         cache_idx, &pc->cache_pages[cache_idx].ctx);
-        pc->cache_pages[cache_idx].qp = qp;
-      }
-    }
-    //if (threadIdx.x == 0) printf("%u %u\n", fetch_head, fetch_tail);
-    __syncthreads();
-    for (uint32_t i = threadIdx.x + fetch_head; i < fetch_tail; i += blockDim.x) {
-      uint32_t cache_idx = i % batch_per_block + batch_per_block * blockIdx.x;
-
-      write_data_await(pc->cache_pages[cache_idx].qp,
-                       &pc->cache_pages[cache_idx].ctx);
-    }
-
-#else
-    assert(false || "Not implemented!");
-#endif
-  }
-
-  __global__ void f__k(array_d_t<uint8_t>* a) {
-    int x = 159494;
-    printf("%x %x %x %x\n", (*a)[x * 4096 + 128 * 4], (*a)[x * 4096 + 128 * 4 + 1], (*a)[x * 4096 + 128 * 4 + 2], (*a)[x * 4096 + 128 * 4 + 3]);
-  }
-
-  __global__ void fetch_all_data(array_d_t<uint8_t>* a, int num_pages) {
-    for (int i = threadIdx.x; i < num_pages; i += blockDim.x) {
-      (*a)[i * 4096];
-    }
-  }
-
-  __global__ void get_entry_kernel
-  (float* qdata_global, uint8_t* data_g, int* graph, int qcnt,
-   const int num_nodes, const int num_dims, const int max_m,
-   const int ef_search, const int entry, int* result,
-   uint32_t* neighbor_id, float* neighbor_dist
-  );
-  
-  __global__ void search_disk_graph_kernel2
-  (DiskData* data, float* qdata, const int num_dims,
-   PQSearchData* pq_data,
-   int nodes_per_page, int node_len, int data_len,
-   int* entries,
-   const int max_m, const int ef_search, const int topk,
-   int* nns, float* distances, int* found_cnt,
-   int qcnt);
-
-  
-
   BaMExecutor::BaMExecutor(const std::string &fpath, const Layout &layout,
+                           const DataType& data_type,
                            const BaMConfig &config, bool copy_data)
     : layout_(layout) {
     block_cnt_ = 112 * 100;
     block_dim_ = 32;
     visited_list_size_ = 8192 * 8;
     visited_table_size_ = visited_list_size_ * 2;
+    data_type_ = data_type;
     
     init(config);
     if (copy_data) {
@@ -261,81 +174,6 @@ namespace gustann {
                            const int topk, const int ef_search, int *nns,
                            float *distances, int *found_cnt,
                            const Config &config, PQSearch *pq) {
-#if 0
-    int num_queries = num_queries_;
-    if (search_type == HYBRID) {
-      //GustANN::search_hybrid(qdata, num_queries, topk, ef_search, nns, distances, found_cnt);
-      return;
-    }
-
-    if (pq) pq->init_device(layout_.num_dims, layout_.num_data, block_cnt_, ef_search);
-    //::init_opt();
-    
-    thrust::device_vector<float> d_qdata(num_queries * layout_.num_dims);
-    thrust::copy(qdata, qdata + num_queries * layout_.num_dims, d_qdata.begin());
-
-    std::vector<int> entries(num_queries, layout_.enter_point);
-    thrust::device_vector<int> d_entries(num_queries);
-    thrust::device_vector<int> d_nns(num_queries * topk);
-    thrust::device_vector<float> d_distances(num_queries * topk);
-    thrust::device_vector<int> d_found_cnt(num_queries);
-    thrust::device_vector<int> d_visited_table(visited_table_size_ * block_cnt_, -1);
-    thrust::device_vector<int> d_visited_list(visited_list_size_ * block_cnt_);
-    thrust::device_vector<int64_t> d_acc_visited_cnt(block_cnt_, 0);
-    thrust::device_vector<Neighbor> d_neighbors(ef_search * block_cnt_);
-    thrust::device_vector<int> d_cand_nodes(ef_search * block_cnt_);
-    thrust::device_vector<float> d_cand_distances(ef_search * block_cnt_);
-
-    thrust::copy(entries.begin(), entries.end(), d_entries.begin());
-    DEBUG("Start Search");
-
-    //fetch_all_data<<<1, 32>>>(bam_data_.a->d_array_ptr, num_pages_);
-                                               
-    bam_data_.a->print_reset_stats();
-    CHECK_CUDA(cudaDeviceSynchronize());
-    double start = elapsed();
-    search_disk_graph_kernel<<<block_cnt_, block_dim_>>>(
-      thrust::raw_pointer_cast(d_qdata.data()),
-      num_queries,
-#ifdef _IN_MEM
-      mem_data_,
-#else
-      bam_data_.a->d_array_ptr,
-#endif
-      layout_.num_data, layout_.num_dims, layout_.max_m0, ef_search, 
-      thrust::raw_pointer_cast(d_entries.data()),
-      topk,
-      thrust::raw_pointer_cast(d_nns.data()), 
-      thrust::raw_pointer_cast(d_distances.data()), 
-      thrust::raw_pointer_cast(d_found_cnt.data()), 
-      thrust::raw_pointer_cast(d_visited_table.data()),
-      thrust::raw_pointer_cast(d_visited_list.data()),
-      visited_table_size_, visited_list_size_,
-      thrust::raw_pointer_cast(d_acc_visited_cnt.data()),
-      thrust::raw_pointer_cast(d_neighbors.data()),
-      nodes_per_page_, layout.node_size, layout_.data_size, data_type_,
-      (pq ? pq->get_device_ptr() : nullptr)
-    );
-    CHECK_CUDA(cudaDeviceSynchronize());
-    double end = elapsed();
-
-    DEBUG0("End Search");
-    INFO("Use time: {}", end - start);
-    std::vector<int64_t> acc_visited_cnt(block_cnt_);
-    thrust::copy(d_acc_visited_cnt.begin(), d_acc_visited_cnt.end(), acc_visited_cnt.begin());
-    thrust::copy(d_nns.begin(), d_nns.end(), nns);
-    thrust::copy(d_distances.begin(), d_distances.end(), distances);
-    thrust::copy(d_found_cnt.begin(), d_found_cnt.end(), found_cnt);
-    CHECK_CUDA(cudaDeviceSynchronize());
-    int64_t full_visited_cnt = std::accumulate(acc_visited_cnt.begin(), acc_visited_cnt.end(), 0LL);
-    DEBUG("full number of visited nodes: {}", full_visited_cnt);
-    DEBUG("max: {}, min: {}", *std::max_element(acc_visited_cnt.begin(), acc_visited_cnt.end()),
-          *std::min_element(acc_visited_cnt.begin(), acc_visited_cnt.end()));
-
-    bam_data_.a->print_reset_stats();
-#else
-    /*
-    */
     int num_queries = num_queries_;
     //num_queries = 10;
     
@@ -423,7 +261,6 @@ namespace gustann {
     CHECK_CUDA(cudaDeviceSynchronize());
 
     bam_data_.a->print_reset_stats();
-#endif
 
   }
 

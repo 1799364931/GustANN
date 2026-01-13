@@ -38,7 +38,7 @@
   #define conversion(x) ( x )
 #endif
 
-#define WARP_SIZE 32
+//#define WARP_SIZE 32
 
 struct Neighbor {
   cuda_scalar distance;

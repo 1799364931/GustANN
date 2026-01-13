@@ -1,3 +1,7 @@
+#pragma once
+
+#include "common_cuda.cuh"
+#include "util.cuh"
 
 __inline__ __device__ void PQSearchData::init_query(float *q, int batch_offset) {
   // AB_BUFFER
@@ -64,7 +68,7 @@ __inline__ __device__ float PQSearchData::compute_dist(int idx, int batch_offset
   for (int i = threadIdx.x; i < num_chunks; i += blockDim.x) {
     dist += dist_vec[i * num_pivots + data[i]];
   }
-  float val = cuhnsw::warp_reduce_sum(dist);
+  float val = gustann::warp_reduce_sum(dist);
   
   // write out the partial reduction to shared memory if appropiate
   if (lane == 0) {
@@ -80,7 +84,7 @@ __inline__ __device__ float PQSearchData::compute_dist(int idx, int batch_offset
   // otherwise reduce again in the first warp
   val = (threadIdx.x < blockDim.x / WARP_SIZE) ? shared[lane]: 0.0f;
   if (warp == 0) {
-    val = cuhnsw::warp_reduce_sum(val);
+    val = gustann::warp_reduce_sum(val);
     // broadcast back to shared memory
     if (threadIdx.x == 0) {
         shared[0] = val;

@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
 
   std::string ssd_list_file;
 
-#ifdef USE_BAM
+#ifdef _USE_BAM
   program.add_argument("--num_ctrls").store_into(config.num_ctrls);
   program.add_argument("--copy_data").store_into(copy_data);
   program.add_argument("--cache_page").store_into(config.num_page);

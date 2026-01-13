@@ -1,4 +1,5 @@
 #pragma once
+#include "def.cuh"
 
 namespace gustann {
 

@@ -29,7 +29,7 @@ namespace gustann {
 
   class BaMExecutor {
   public:
-    BaMExecutor(const std::string &fpath, const Layout& layout, const BaMConfig& config, bool copy_data);
+    BaMExecutor(const std::string &fpath, const Layout& layout, const DataType& data_type, const BaMConfig& config, bool copy_data);
     void search(const float *qdata, const int num_queries_, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
                 const Config& config, PQSearch* pq);
@@ -50,6 +50,7 @@ namespace gustann {
 
     int64_t page_size_;
     Layout layout_;
+    DataType data_type_;
 
     uint8_t *mem_data_;
 

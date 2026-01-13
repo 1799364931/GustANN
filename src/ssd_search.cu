@@ -89,7 +89,7 @@ namespace gustann {
     ASSERT(layout_.node_size * layout_.nodes_per_page <= config.page_size);
 
 
-    bam_ = new BaMExecutor(fpath, layout_, config, copy);
+    bam_ = new BaMExecutor(fpath, layout_, data_type_, config, copy);
 
     //page_size_ = config.page_size;
     DEBUG("Initialization finished");

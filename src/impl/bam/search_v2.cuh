@@ -1,3 +1,13 @@
+#pragma once
+
+#include "def.cuh"
+#include "page_cache.h"
+#include "page_wrapper.cuh"
+
+#include "../pq.cuh"
+#include "../util.cuh"
+//#include "../calc.cuh"
+
 namespace gustann {
 
   __global__ void __launch_bounds__(128, 14)

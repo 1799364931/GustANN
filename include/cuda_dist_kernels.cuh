@@ -9,24 +9,6 @@
 
 namespace cuhnsw {
 
-// https://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
-__inline__ __device__
-cuda_scalar warp_reduce_sum(cuda_scalar val) {
-  #if __CUDACC_VER_MAJOR__ >= 9
-  // __shfl_down is deprecated with cuda 9+. use newer variants
-  unsigned int active = __activemask();
-  #pragma unroll
-  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-      val = add(val, __shfl_down_sync(active, val, offset));
-  }
-  #else
-  #pragma unroll
-  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-      val = add(val, __shfl_down(val, offset));
-  }
-  #endif
-  return val;
-}
 
 __inline__ __device__
 cuda_scalar dot(const cuda_scalar * a, const cuda_scalar * b, const int num_dims) {

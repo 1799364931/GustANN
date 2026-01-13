@@ -4,6 +4,9 @@
 #undef CHECK_CUDA
 #endif
 
+
+static constexpr int WARP_SIZE = 32;
+
 #define CHECK_CUDA(code) { checkCuda((code), __FILE__, __LINE__); }
 inline void checkCuda(cudaError_t code, const char *file, int line) {
   if (code != cudaSuccess) {
