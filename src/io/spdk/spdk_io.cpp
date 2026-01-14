@@ -423,8 +423,15 @@ namespace gustann {
       for (int i = 0; i < num_ssd; i++) {
         worker.emplace_back(runner, i);
       }
-    
-    
+    }
+
+    uint8_t* create_buffer(int64_t size) override {
+      return (uint8_t *)spdk_dma_zmalloc_socket(sizeof(uint8_t) * size,
+                                                PAGE_SIZE, NULL, 1);
+    }
+
+    void destroy_buffer(uint8_t* buf) override {
+      spdk_free(buf);
     }
   };
 

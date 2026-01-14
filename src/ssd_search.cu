@@ -7,6 +7,7 @@
 
 #include "common.hpp"
 #include "common_cuda.cuh"
+#include "hybrid.hpp"
 #include "ssd_search.hpp"
 #include "ssd_search_kernel.hpp"
 
@@ -83,15 +84,27 @@ namespace gustann {
          layout_.num_pages);
   }
 #ifdef _USE_BAM  
-  void GustANN::init(const BaMConfig& config, const std::string& fpath, bool copy) {
+  void GustANN::init_bam(const BaMConfig& config, const std::string& fpath, bool copy) {
     parse_diskann_metadata(fpath);
     DEBUG("{} {}", layout_.node_size * layout_.nodes_per_page, config.page_size);
     ASSERT(layout_.node_size * layout_.nodes_per_page <= config.page_size);
 
-
-    bam_ = new BaMExecutor(fpath, layout_, data_type_, config, copy);
+    search_type = BAM;
+    executor_.bam = new BaMExecutor(fpath, layout_, data_type_, config, copy);
 
     //page_size_ = config.page_size;
+    DEBUG("Initialization finished");
+  }
+#endif
+
+// TODO: walkaround!!!
+#ifndef _USE_BAM
+  void GustANN::init_hybrid(const std::string& fpath, const HybridExecutorConfig& config) {
+
+    parse_diskann_metadata(fpath);
+    
+    search_type = HYBRID;
+    executor_.hybrid = new HybridExecutor(layout_, data_type_, fpath, config);
     DEBUG("Initialization finished");
   }
 #endif
@@ -99,12 +112,25 @@ namespace gustann {
                        const int topk, const int ef_search, int *nns,
                        float *distances, int *found_cnt, const Config &config,
                        PQSearch *pq) {
-
+      
 #ifdef _USE_BAM
-    bam_->search(qdata, num_queries_, topk, ef_search, nns, distances, found_cnt, config, pq);
-#else
-    ERROR("Not Implemented!");
-    throw;
+    if (search_type == BAM) {
+      executor_.bam->search(qdata, num_queries_, topk, ef_search, nns, distances,
+                   found_cnt, config, pq);
+      return;
+    }
 #endif
+// TODO: walkaround!
+#ifndef _USE_BAM
+    if (search_type == HYBRID) {
+      executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
+                               distances, found_cnt, config, pq);
+      return;
+    }
+#endif
+    ERROR("UnInited!");
+    throw;
   }
+
+
 }

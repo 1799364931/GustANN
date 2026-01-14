@@ -33,6 +33,10 @@ namespace gustann {
         memcpy(dst, index + (int64_t) blk * PAGE_SIZE, PAGE_SIZE);
       }
     }
+    uint8_t *create_buffer(int64_t size) override { return new uint8_t[size]; }
+    void destroy_buffer(uint8_t *buf) override {
+      delete [] buf;
+    }
     bool poll_task(int) override { return true; }
     ~MemLoaderSync() {
       delete [] index;
@@ -45,5 +49,9 @@ namespace gustann {
         std::make_shared<MemLoaderSync>(filename, num_pages);
     return mem_io;
   }
+
+
+
+  
 
 }

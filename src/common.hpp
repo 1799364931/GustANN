@@ -29,7 +29,6 @@ namespace gustann {
 
   struct Config {
     std::string nav_data = "";
-    int warmup_batch = 0;
     std::vector<std::string> ssd_list;
   };
 

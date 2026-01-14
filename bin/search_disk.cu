@@ -1,3 +1,4 @@
+#include "hybrid.hpp"
 #include "ssd_search.hpp"
 #include "spdlog/spdlog.h"
 #include <set>
@@ -45,6 +46,7 @@ int main(int argc, char **argv) {
   program.add_argument("--num_ctrls").store_into(config.num_ctrls);
   program.add_argument("--copy_data").store_into(copy_data);
   program.add_argument("--cache_page").store_into(config.num_page);
+  program.add_argument("--copy_only").store_into(only_copy);
 #endif
   program.add_argument("--query").required().store_into(query_file);
   program.add_argument("--index").required().store_into(index_file);
@@ -52,7 +54,7 @@ int main(int argc, char **argv) {
   //program.add_argument("--data_type").store_into(data_type);
   program.add_argument("--topk").store_into(topk);
   program.add_argument("--ef_search").store_into(ef_search);
-  program.add_argument("--copy_only").store_into(only_copy);
+
 #ifdef HYBRID_CALC
   program.add_argument("--minibatch", "-B").required().store_into(batch);
   program.add_argument("--thread", "-T").required().store_into(thread);
@@ -61,7 +63,6 @@ int main(int argc, char **argv) {
   program.add_argument("--repeat", "-R").store_into(repeat);
   program.add_argument("--pq_data").required().store_into(pq_data);
   program.add_argument("--nav_graph").store_into(search_config.nav_data);
-  program.add_argument("--warmup").store_into(search_config.warmup_batch);
   program.add_argument("--ssd_list_file").store_into(ssd_list_file);
   
   try {
@@ -108,10 +109,15 @@ int main(int argc, char **argv) {
   gustann::GustANN a(dtype);
 
 #ifdef HYBRID_CALC
-  a.init_hybrid(index_file);
+  gustann::HybridExecutorConfig config;
+  config.mini_batch = batch;
+  config.thread_cnt = thread;
+  config.ctx_per_thread = ctx_per_thread;
+  config.use_backend = gustann::HybridExecutorConfig::MEMORY;
+  a.init_hybrid(index_file, config);
 #else
-  a.init(config,
-         index_file, copy_data);
+  a.init_bam(config, index_file, copy_data);
+  if (only_copy) return 0;
 #endif
 
 
@@ -136,7 +142,7 @@ int main(int argc, char **argv) {
     break;
   }
   }
-  if (only_copy) return 0;
+  
   
   INFO("Read {} queries", nq);
 
@@ -155,14 +161,10 @@ int main(int argc, char **argv) {
   
   std::unique_ptr<int[]> nns(new int [nq * topk]);
   std::unique_ptr<float[]> dis(new float [nq * topk]);
-  std::unique_ptr<int[]> found_cnt(new int [nq]);
-      
-#ifdef HYBRID_CALC
-  a.search_hybrid(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get(),
-                  batch, thread, ctx_per_thread, search_config, &pq_search);
-#else
+  std::unique_ptr<int[]> found_cnt(new int[nq]);
+  
   a.search(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get(), search_config, &pq_search);
-#endif
+
 
   
   for (int i = 0; i < 5; i++) {

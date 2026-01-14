@@ -17,6 +17,8 @@ namespace gustann {
     virtual bool poll_task(int ctx_id) = 0;
     virtual void log_latency(const std::vector<double> &percentages) {}
     virtual void clear_stats() {}
+    virtual uint8_t *create_buffer(int64_t size) = 0;
+    virtual void destroy_buffer(uint8_t *) = 0;
     virtual ~IndexLoader() {}
   };
 

@@ -18,6 +18,7 @@
 #include <thrust/execution_policy.h>
 
 //#include "ssd_io.hpp"
+#include "hybrid.hpp"
 
 #include "common.hpp"
 #include "common_cuda.cuh"
@@ -26,25 +27,9 @@
 #include "ssd_search.hpp"
 #include "ssd_search_kernel.hpp"
 
-#include "spdk/env.h"
-#ifdef PAGE_SIZE
-#undef PAGE_SIZE
-#endif
-
-
 #include "io/interface.hpp"
 
-
-
-
-
 #define REPORT(fmt, ...) printf("[REPORT] " fmt "\n", __VA_ARGS__)
-
-#define BACKEND_SPDK 0 
-#define BACKEND_URING 1
-#define BACKEND_MEM 2
-
-#define USE_IO BACKEND_MEM
 
 #define NAV_GRAPH
 //#define LOAD_PROBE
@@ -52,15 +37,9 @@
 //#define CACHE_START
 
 namespace gustann {
-  static std::string fpath_;
-  void GustANN::init_hybrid(const std::string& fpath) {
-    search_type = HYBRID;
-    parse_diskann_metadata(fpath);
 
-    fpath_ = fpath;
-    DEBUG("Initialization finished");
-  }
-  using ::checkCuda;
+
+  
 
   __global__ void init_search(float* qdata, PQSearchData* pq_data, int stream_offset, int dim);
 
@@ -156,7 +135,7 @@ namespace gustann {
     float *distances;
     int *found_cnt;
     int tcnt;
-    int num_data;
+    int64_t num_data;
     PQSearch* pq;
 #ifdef COPY_DATA
     uint8_t* buffer_dev;
@@ -570,7 +549,7 @@ namespace gustann {
     }
     
     TaskRunner(int _tid, int _cid, int _mini_batch, int _num_dims,
-               int _topk, int _num_data, int _max_m0, int _ef_search,
+               int _topk, int64_t _num_data, int _max_m0, int _ef_search,
                int _enter_point, uint8_t* _starter, PQSearch *_pq,
                int nodes_per_page, int node_size, int data_size,
                std::shared_ptr<IndexLoader> _loader,
@@ -619,14 +598,9 @@ namespace gustann {
 #endif
       //CHECK_CUDA(cudaMallocHost(&buffer, sizeof(uint8_t) * PAGE_SIZE * mini_batch));
 
-#if USE_IO == BACKEND_SPDK
-      buffer =
-        (uint8_t *) spdk_dma_zmalloc_socket(sizeof(uint8_t) * PAGE_SIZE * mini_batch,
-                                            PAGE_SIZE, NULL, 1);
-#else
-      buffer = new uint8_t [(size_t) PAGE_SIZE * mini_batch];
-#endif
 
+      buffer = loader->create_buffer((int64_t)PAGE_SIZE * mini_batch);
+      
       CHECK_CUDA(cudaHostRegister(buffer, sizeof(uint8_t) * PAGE_SIZE * mini_batch, cudaHostRegisterDefault));
 #ifdef COPY_DATA
       CHECK_CUDA(cudaMalloc(&buffer_dev, PAGE_SIZE * mini_batch));
@@ -675,43 +649,59 @@ namespace gustann {
     }
   };
 
+
+  HybridExecutor::HybridExecutor(const Layout &layout,
+                                 const DataType &data_type,
+                                 const std::string &fpath,
+                                 const HybridExecutorConfig &config)
+    : layout_(layout), data_type_(data_type) {
+    mini_batch_ = config.mini_batch;
+    thread_cnt_ = config.thread_cnt;
+    ctx_per_thread_ = config.ctx_per_thread;
+    
+    FILE *input = fopen(fpath.c_str(), "rb");
+    if (!input) {
+      ERROR("Index File Not found!");
+      exit(-1);
+    }
     
 
+    starter_ = new uint8_t[PAGE_SIZE];
+    fseek(input, (long) PAGE_SIZE * (layout_.enter_point / layout_.nodes_per_page + 1), SEEK_SET);
+    fread((char *)starter_, sizeof(char), PAGE_SIZE, input);
+    
 
-  void GustANN::search_hybrid(const float *qdata, int num_queries, int topk,
+    fclose(input);
+
+
+    if (config.use_backend == HybridExecutorConfig::SPDK) {
+      const auto& ssds = config.ssd_lists;
+      if (ssds.empty()) {
+        ERROR("NO SSD IN USE!");
+        exit(-1);
+      }
+      loader_ = create_spdk_loader(ssds, mini_batch_ * ctx_per_thread_,
+                                   thread_cnt_, thread_cnt_ * ctx_per_thread_);
+    } else if (config.use_backend == HybridExecutorConfig::MEMORY) {
+      loader_ = create_mem_loader_sync(fpath.c_str(), layout_.num_pages);
+    } else {
+      ERROR("Wrong IO Backend setting!");
+      exit(-1);
+    }
+
+  }
+
+  void HybridExecutor::search(const float *qdata, int num_queries, int topk,
                              int ef_search, int *nns, float *distances, int *found_cnt,
-                             int mini_batch, int stream_cnt, int ctx_per_thread,
-                             const Config& config,
-                             PQSearch* pq
+                             const Config& config, PQSearch* pq
                              ) {
-    int batch_cnt = mini_batch * stream_cnt * ctx_per_thread;
+    int batch_cnt = mini_batch_ * thread_cnt_ * ctx_per_thread_;
     //num_queries = 1;
     CHECK_CUDA(cudaHostRegister((void*)qdata, sizeof(float) * num_queries * layout_.num_dims, cudaHostRegisterDefault));
     
     if (pq) pq->init_device(layout_.num_dims, layout_.num_data, batch_cnt, ef_search);
     
-    FILE* input = fopen(fpath_.c_str(), "rb");
-
-    uint8_t* starter = new uint8_t[PAGE_SIZE];
-    fseek(input, (long) PAGE_SIZE * (layout_.enter_point / layout_.nodes_per_page + 1), SEEK_SET);
-    fread((char*) starter, sizeof(char), PAGE_SIZE, input);
-
-    fclose(input);
-    
     std::atomic<int> tot_reads(0);
-#if USE_IO == BACKEND_SPDK
-    std::vector<std::string> ssds = config.ssd_list;
-    if (ssds.empty()) {
-      fprintf(stderr, "NO SSD IN USE!\n");
-      throw;
-    }
-    auto loader = create_spdk_loader(ssds, mini_batch * ctx_per_thread, stream_cnt,
-               stream_cnt * ctx_per_thread);
-#elif USE_IO == BACKEND_MEM
-    auto loader = create_mem_loader_sync(fpath_.c_str(), layout_.num_pages);
-#else
-#error "Wrong USE_IO Settings!"
-#endif
     
     NavGraph nav_graph;
 #ifdef NAV_GRAPH
@@ -734,13 +724,13 @@ namespace gustann {
       bool finished = false;
       int tot_task = 0;
       std::vector<TaskRunner> tasks;
-      for (int i = 0; i < ctx_per_thread; i++) {
-        tasks.emplace_back(threadid, threadid * ctx_per_thread + i, mini_batch, layout_.num_dims,
-                           topk, layout_.num_data, layout_.max_m0, ef_search,
-                           layout_.enter_point, starter, pq,
-                           layout_.nodes_per_page, layout_.node_size, layout_.data_size,
-                           loader,
-                           &nav_graph);
+      for (int i = 0; i < ctx_per_thread_; i++) {
+        tasks.emplace_back(threadid, threadid * ctx_per_thread_ + i,
+                           mini_batch_, (int)layout_.num_dims, topk,
+                           layout_.num_data, (int)layout_.max_m0, ef_search,
+                           (int)layout_.enter_point, starter_, pq,
+                           (int)layout_.nodes_per_page, (int)layout_.node_size,
+                           (int)layout_.data_size, loader_, &nav_graph);       
       }
       double t0 = elapsed();
       INFO("Thread {} started", threadid);
@@ -750,8 +740,8 @@ namespace gustann {
         for (auto& task: tasks) {
           if (task.update_state()) {
             if (cur.load() < num_queries) {
-              int qstart = cur.fetch_add(mini_batch);              
-              int qend = std::min(qstart + mini_batch, num_queries);
+              int qstart = cur.fetch_add(mini_batch_);             
+              int qend = std::min(qstart + mini_batch_, num_queries);
               int qcnt = qend - qstart;
               //printf("!!! %d %d\n", qstart, qcnt);
               if (qstart < num_queries) {
@@ -871,11 +861,11 @@ namespace gustann {
     std::vector<std::thread> th;
     CHECK_CUDA(cudaDeviceSynchronize());
     double start = elapsed();
-    for (int i = 0; i < stream_cnt; i++) {
+    for (int i = 0; i < thread_cnt_; i++) {
       th.emplace_back(worker, i);
     }
 
-    for (int i = 0; i < stream_cnt; i++) {
+    for (int i = 0; i < thread_cnt_; i++) {
       th[i].join();
     }
     CHECK_CUDA(cudaDeviceSynchronize());
