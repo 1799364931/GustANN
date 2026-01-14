@@ -1,5 +1,5 @@
 #pragma once
-#ifdef _USE_BAM
+#ifdef USE_BAM
 #include "bam.hpp"
 #endif
 #include "pq_search.hpp"
@@ -25,11 +25,14 @@ namespace gustann {
     DataType data_type_;
 
     union {
-#ifdef _USE_BAM
+#ifdef USE_BAM
       BaMExecutor* bam;
 #endif
       HybridExecutor* hybrid;
     } executor_;
+
+    PQSearch *pq_ = nullptr;
+    NavGraph *nav_ = nullptr;
 
     enum SearchType {
       UNINITED,
@@ -48,12 +51,12 @@ namespace gustann {
     void init_gustann_internal();
   public:
     GustANN(DataType = FLOAT);
-#ifdef _USE_BAM
+#ifdef USE_BAM
     void init_bam(const BaMConfig &config, const std::string &fpath, bool copy);
 #endif
     void init_hybrid(const std::string& fpath, const HybridExecutorConfig& config);
 
     void search(const float *qdata, const int num_queries, const int topk,
-                const int ef_search, int *nns, float *distances, int *found_cnt, const Config& config, PQSearch* pq = nullptr);  
+                const int ef_search, int *nns, float *distances, int *found_cnt);  
   };
 } // namespace gustann

@@ -37,12 +37,12 @@ endif()
 
 find_package(OpenMP)
 
-include_directories(src/)
 
-add_subdirectory(deps/json11)
+
+#add_subdirectory(deps/json11)
 add_subdirectory(deps/spdlog)
 add_subdirectory(deps/argparse)
 
-add_subdirectory(src/io)
+add_subdirectory(src)
 add_subdirectory(bin/)
 

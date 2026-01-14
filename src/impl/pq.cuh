@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../pq_search.hpp"
-#include "common_cuda.cuh"
+#include "../common_cuda.cuh"
 #include "util.cuh"
 
 namespace gustann {

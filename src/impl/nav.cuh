@@ -6,7 +6,7 @@ namespace gustann {
 #if 1
   const int L = 4;
   const int R = 28;
-  __global__ void get_entry_kernel
+  inline __global__ void get_entry_kernel
   (float* qdata_global, uint8_t* data_g, int* graph, int qcnt,
    const int num_nodes, const int num_dims, const int max_m,
    const int ef_search, const int entry, int* result,

@@ -1,13 +1,8 @@
-#include "hybrid.hpp"
 #include "ssd_search.hpp"
 #include "spdlog/spdlog.h"
 #include <set>
-#include "utils.hpp"
-#include "pq_search.hpp"
 
 #include <argparse/argparse.hpp>
-
-std::shared_ptr<spdlog::logger> logger_ = nullptr;
 
 int main(int argc, char **argv) {
   spdlog::set_pattern("[%^%-8l%$] %Y-%m-%d %H:%M:%S [%s:%#] %v");

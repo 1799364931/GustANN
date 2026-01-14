@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common_cuda.cuh"
+#include "../common_cuda.cuh"
 
 namespace gustann {
   // https://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
@@ -95,7 +95,7 @@ namespace gustann {
   }
 
   // In kernel lower bound. 
-  __device__ int lower_bound(float* dist_arr, uint32_t* id_arr, int l, int r, float d, int x) {
+  __inline__ __device__ int lower_bound(float* dist_arr, uint32_t* id_arr, int l, int r, float d, int x) {
     x = x & 0x7fffffff;
     while(l < r) {
       int mid = (l + r) / 2;
