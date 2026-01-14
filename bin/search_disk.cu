@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
   int thread, batch, ctx_per_thread;
   std::string pq_data;
   int repeat = 20; // FIXME: repeat value cannot be too small???
+  std::string io_backend = "memory";
 
   std::string ssd_list_file;
 
@@ -50,17 +51,20 @@ int main(int argc, char **argv) {
   program.add_argument("--ground_truth").store_into(gt_file);
   //program.add_argument("--data_type").store_into(data_type);
   program.add_argument("--topk").store_into(topk);
-  program.add_argument("--ef_search").store_into(ef_search);
+  program.add_argument("--ef_search").store_into(ef_search);  
+  program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
+  program.add_argument("--nav_graph").store_into(search_config.nav_graph_prefix);
 
 #ifdef HYBRID_CALC
   program.add_argument("--minibatch", "-B").required().store_into(batch);
   program.add_argument("--thread", "-T").required().store_into(thread);
-  program.add_argument("--ctx_per_thread", "-C").required().store_into(ctx_per_thread);
+  program.add_argument("--ctx_per_thread", "-C")
+      .required()
+      .store_into(ctx_per_thread);
+  program.add_argument("--ssd_list_file").store_into(ssd_list_file);
+  program.add_argument("--io_backend").store_into(io_backend);
 #endif
   program.add_argument("--repeat", "-R").store_into(repeat);
-  program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
-  program.add_argument("--nav_graph").store_into(search_config.nav_graph_prefix);
-  program.add_argument("--ssd_list_file").store_into(ssd_list_file);
   
   try {
     program.parse_args(argc, argv);
@@ -112,7 +116,16 @@ int main(int argc, char **argv) {
   hybrid_config.mini_batch = batch;
   hybrid_config.thread_cnt = thread;
   hybrid_config.ctx_per_thread = ctx_per_thread;
-  hybrid_config.use_backend = gustann::HybridExecutorConfig::MEMORY;
+  if (io_backend == "memory") {
+    INFO("Use Memory Backend")
+    hybrid_config.use_backend = gustann::HybridExecutorConfig::MEMORY;
+  } else if (io_backend == "spdk") {
+    INFO("Use SPDK Backend")
+    hybrid_config.use_backend = gustann::HybridExecutorConfig::SPDK;
+  } else {
+    ERROR("unrecognized io_backend: {}, must be 'memory' or 'spdk'", io_backend);
+    exit(-1);
+  }
   hybrid_config.ssd_lists = ssd_lists;
   a.init_hybrid(search_config, hybrid_config);
 #else
