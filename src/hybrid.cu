@@ -162,32 +162,33 @@ namespace gustann {
         (d_qdata,
          pq->get_device_ptr(),
          stream_offset, num_dims);
-#ifdef NAV_GRAPH
-      int init_ef = std::min(ef_search, 5);
-      int dim = nav_graph->data_len;
-
-      get_entry_kernel<<<(qcnt + 1) / 2, 64, 0, stream>>>
-        (d_qdata, nav_graph->data_dev, nav_graph->graph_dev, qcnt,
-         nav_graph->num_node, dim, nav_graph->max_m,
-         init_ef, nav_graph->start, request,
-         thrust::raw_pointer_cast(d_neighbors_id.data()),
-         thrust::raw_pointer_cast(d_neighbors_dist.data())
-         );
-#else
-
-      for (int j = 0; j < qcnt; j++) {
+      if (nav_graph) {
+        int init_ef = std::min(ef_search, 5);
+        int dim = nav_graph->data_len;
+        
+        get_entry_kernel<<<(qcnt + 1) / 2, 64, 0, stream>>>
+          (d_qdata, nav_graph->data_dev, nav_graph->graph_dev, qcnt,
+           nav_graph->num_node, dim, nav_graph->max_m,
+           init_ef, nav_graph->start, request,
+           thrust::raw_pointer_cast(d_neighbors_id.data()),
+           thrust::raw_pointer_cast(d_neighbors_dist.data())
+          );
+      } else {
+        
+        for (int j = 0; j < qcnt; j++) {
 #ifdef CACHE_START
-        request[j] = start_pt[j] == -1 ? enter_point : start_pt[j];
+          request[j] = start_pt[j] == -1 ? enter_point : start_pt[j];
 #else
-        //read_page(enter_point_, local_buf + PAGE_SIZE * j);
-        memcpy(buffer + PAGE_SIZE * j, starter, PAGE_SIZE);
-        //CHECK_CUDA(cudaMemcpyAsync(buffer + PAGE_SIZE * j, starter,
-        //                           PAGE_SIZE, cudaMemcpyHostToHost,
-        //                           stream));
-        request[j] = enter_point;
+          //read_page(enter_point_, local_buf + PAGE_SIZE * j);
+          memcpy(buffer + PAGE_SIZE * j, starter, PAGE_SIZE);
+          //CHECK_CUDA(cudaMemcpyAsync(buffer + PAGE_SIZE * j, starter,
+          //                           PAGE_SIZE, cudaMemcpyHostToHost,
+          //                           stream));
+          request[j] = enter_point;
 #endif
+        }
       }
-#endif
+
       state = Q_INIT;
       time_init_issue += elapsed();
     //submit_gpu();
@@ -463,17 +464,17 @@ namespace gustann {
         if (err == cudaSuccess) {
           if (state == Q_INIT) {
             time_gpu += elapsed();
-#ifdef NAV_GRAPH
-            nav_graph->translate(request, qcnt);
-            submit_ssd();
-#else
+
+            if (nav_graph) {
+              nav_graph->translate(request, qcnt);
+              submit_ssd();
+            } else {
 #ifdef CACHE_START
             submit_ssd();
 #else
-            //printf("!!!! INIT->GPU\n");
             submit_gpu();
 #endif
-#endif
+            }
           } else if (state == Q_GPU) {
             //printf("!!!! GPU->SSD\n");
             time_gpu += elapsed();
@@ -513,7 +514,7 @@ namespace gustann {
                int _enter_point, uint8_t* _starter, PQSearch *_pq,
                int nodes_per_page, int node_size, int data_size,
                std::shared_ptr<IndexLoader> _loader,
-               NavGraph* _nav_graph) {
+               NavGraph* _nav) {
 
       tid = _tid;
       cid = _cid;
@@ -528,14 +529,14 @@ namespace gustann {
       aligned_ef = (ef_search + max_m0 + 31) / 32 * 32; // MODIFIED IN VERSION B
       starter = _starter;
       enter_point = _enter_point;
-      pq = _pq;
 
       nodes_per_page_ = nodes_per_page;
       node_size_ = node_size;
       data_size_ = data_size;
       loader = _loader;
 
-      nav_graph = _nav_graph;
+      nav_graph = _nav;
+      pq = _pq;
 
       tcnt = (max_m0 + 31) / 32 * 32;
 
@@ -653,25 +654,21 @@ namespace gustann {
 
   void HybridExecutor::search(const float *qdata, int num_queries, int topk,
                              int ef_search, int *nns, float *distances, int *found_cnt,
-                             const Config& config, PQSearch* pq
+                              PQSearch *pq_, NavGraph *nav_
                              ) {
     int batch_cnt = mini_batch_ * thread_cnt_ * ctx_per_thread_;
     //num_queries = 1;
     CHECK_CUDA(cudaHostRegister((void*)qdata, sizeof(float) * num_queries * layout_.num_dims, cudaHostRegisterDefault));
-    
-    if (pq) pq->init_device(layout_.num_dims, layout_.num_data, batch_cnt, ef_search);
+
+    if (pq_) {
+      pq_->init_device(layout_.num_dims, layout_.num_data, batch_cnt,
+                       ef_search);
+    } else {
+      ERROR("PQ is not inited!");
+      throw;
+    }
     
     std::atomic<int> tot_reads(0);
-    
-    NavGraph nav_graph;
-#ifdef NAV_GRAPH
-    const std::string nav_index_file = config.nav_data + "/" + "nav_index";
-    const std::string nav_data_file = config.nav_data + "/"+ "nav_index.data";
-    const std::string nav_map_file = config.nav_data + "/" + "map.txt";
-
-    INFO("Use small navigation graph!");
-    nav_graph.init(nav_index_file, nav_data_file, nav_map_file);
-#endif
 
     int* start_pts = new int [num_queries];
     memset(start_pts, -1, sizeof(int) * num_queries);
@@ -688,9 +685,9 @@ namespace gustann {
         tasks.emplace_back(threadid, threadid * ctx_per_thread_ + i,
                            mini_batch_, (int)layout_.num_dims, topk,
                            layout_.num_data, (int)layout_.max_m0, ef_search,
-                           (int)layout_.enter_point, starter_, pq,
+                           (int)layout_.enter_point, starter_, pq_,
                            (int)layout_.nodes_per_page, (int)layout_.node_size,
-                           (int)layout_.data_size, loader_, &nav_graph);       
+                           (int)layout_.data_size, loader_, nav_);       
       }
       double t0 = elapsed();
       INFO("Thread {} started", threadid);

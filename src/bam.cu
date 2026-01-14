@@ -173,17 +173,9 @@ namespace gustann {
   void BaMExecutor::search(const float *qdata, const int num_queries_,
                            const int topk, const int ef_search, int *nns,
                            float *distances, int *found_cnt,
-                           const Config &config, PQSearch *pq) {
+                           PQSearch *pq, NavGraph *nav_graph) {
     int num_queries = num_queries_;
-    //num_queries = 10;
-    
-    NavGraph nav_graph;
-    const std::string nav_index_file = config.nav_data + "/" + "nav_index";
-    const std::string nav_data_file = config.nav_data + "/"+ "nav_index.data";
-    const std::string nav_map_file = config.nav_data + "/" + "map.txt";
-
-    INFO("Use small navigation graph!");
-    nav_graph.init(nav_index_file, nav_data_file, nav_map_file);
+    //num_queries = 10;   
     
     thrust::device_vector<float> d_qdata(num_queries * layout_.num_dims);
     thrust::copy(qdata, qdata + num_queries * layout_.num_dims, d_qdata.begin());
@@ -201,7 +193,13 @@ namespace gustann {
     DEBUG("Start Search");
 
     //fetch_all_data<<<1, 32>>>(bam_data_.a->d_array_ptr, num_pages_);
-    if (pq) pq->init_device(layout_.num_dims, layout_.num_data, block_cnt_, ef_search);                                               
+    if (pq) {
+      pq->init_device(layout_.num_dims, layout_.num_data, block_cnt_,
+                      ef_search);
+    } else {
+      ERROR("PQ is not inited!");
+      throw;
+    }
     bam_data_.a->print_reset_stats();
     CHECK_CUDA(cudaDeviceSynchronize());
     double start = elapsed();
@@ -209,20 +207,24 @@ namespace gustann {
 
     int init_ef = std::min(ef_search, 5);
 
-    get_entry_kernel<<<(num_queries + 1) / 2, 64, 0>>>
-      (thrust::raw_pointer_cast(d_qdata.data()),
-       nav_graph.data_dev, nav_graph.graph_dev, num_queries,
-       nav_graph.num_node, layout_.num_dims, nav_graph.max_m,
-       init_ef, nav_graph.start,
-       thrust::raw_pointer_cast(d_entries.data()),
-       thrust::raw_pointer_cast(d_neighbors_id.data()),
-       thrust::raw_pointer_cast(d_neighbors_dist.data())
-      );
+    if (nav_graph) {
+      get_entry_kernel<<<(num_queries + 1) / 2, 64, 0>>>(
+          thrust::raw_pointer_cast(d_qdata.data()), nav_graph->data_dev,
+          nav_graph->graph_dev, num_queries, nav_graph->num_node,
+          layout_.num_dims, nav_graph->max_m, init_ef, nav_graph->start,
+          thrust::raw_pointer_cast(d_entries.data()),
+          thrust::raw_pointer_cast(d_neighbors_id.data()),
+          thrust::raw_pointer_cast(d_neighbors_dist.data()));
+    }
 
     CHECK_CUDA(cudaDeviceSynchronize());
     std::vector<int> entries(num_queries);
     thrust::copy(d_entries.begin(), d_entries.end(), entries.begin());
-    nav_graph.translate(entries.data(), entries.size());
+    if (nav_graph) {
+      nav_graph->translate(entries.data(), entries.size());
+    } else {
+      std::fill(entries.begin(), entries.end(), layout_.enter_point);
+    }
     thrust::copy(entries.begin(), entries.end(), d_entries.begin());
     double t1 = elapsed();
     INFO("Init: {}", t1 - start);

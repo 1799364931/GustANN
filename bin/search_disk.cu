@@ -1,7 +1,8 @@
 #include "ssd_search.hpp"
 #include "spdlog/spdlog.h"
 #include <set>
-
+#include "fstream"
+#include "utils.hpp"
 #include <argparse/argparse.hpp>
 
 int main(int argc, char **argv) {
@@ -10,17 +11,17 @@ int main(int argc, char **argv) {
 
   argparse::ArgumentParser program("search_disk");
 #ifdef _USE_BAM
-  gustann::BaMConfig config;
-  config.num_page = 16384;
-  config.num_ctrls = 5;
-  config.num_queues = 135;
+  gustann::BaMConfig bam_config;
+  bam_config.num_page = 16384;
+  bam_config.num_ctrls = 5;
+  bam_config.num_queues = 135;
 #endif
   
   bool copy_data = false;
   bool only_copy = false;
   std::string query_file ;
   std::string gt_file;
-  std::string index_file;
+  
 #ifdef FLOAT_DATA
   std::string data_type = "float";
 #else
@@ -33,18 +34,19 @@ int main(int argc, char **argv) {
   int thread, batch, ctx_per_thread;
   std::string pq_data;
   int repeat = 20; // FIXME: repeat value cannot be too small???
-  gustann::Config search_config;
 
   std::string ssd_list_file;
 
+  gustann::GustANNConfig search_config;
+
 #ifdef _USE_BAM
-  program.add_argument("--num_ctrls").store_into(config.num_ctrls);
+  program.add_argument("--num_ctrls").store_into(bam_config.num_ctrls);
   program.add_argument("--copy_data").store_into(copy_data);
-  program.add_argument("--cache_page").store_into(config.num_page);
+  program.add_argument("--cache_page").store_into(bam_config.num_page);
   program.add_argument("--copy_only").store_into(only_copy);
 #endif
   program.add_argument("--query").required().store_into(query_file);
-  program.add_argument("--index").required().store_into(index_file);
+  program.add_argument("--index").required().store_into(search_config.index_file);
   program.add_argument("--ground_truth").store_into(gt_file);
   //program.add_argument("--data_type").store_into(data_type);
   program.add_argument("--topk").store_into(topk);
@@ -56,8 +58,8 @@ int main(int argc, char **argv) {
   program.add_argument("--ctx_per_thread", "-C").required().store_into(ctx_per_thread);
 #endif
   program.add_argument("--repeat", "-R").store_into(repeat);
-  program.add_argument("--pq_data").required().store_into(pq_data);
-  program.add_argument("--nav_graph").store_into(search_config.nav_data);
+  program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
+  program.add_argument("--nav_graph").store_into(search_config.nav_graph_prefix);
   program.add_argument("--ssd_list_file").store_into(ssd_list_file);
   
   try {
@@ -69,14 +71,16 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  INFO("Copy Data: {}, Query File: {}, Index File: {}, Ground Truth file: {}, Data Type: {}, topk: {}, ef_search: {}", copy_data, query_file, index_file, gt_file, data_type, topk, ef_search);
+  INFO("Copy Data: {}, Query File: {}, Index File: {}, Ground Truth file: {}, Data Type: {}, topk: {}, ef_search: {}", copy_data, query_file, search_config.index_file, gt_file, data_type, topk, ef_search);
+    
 
+  std::vector<std::string> ssd_lists;
   std::fstream stream(ssd_list_file);
   if (stream) {
     std::string s;
     while(stream >> s) {
       INFO("USE SSD: \"{}\"", s);
-      search_config.ssd_list.push_back(s);
+      ssd_lists.push_back(s);
     }
   }
 
@@ -104,22 +108,17 @@ int main(int argc, char **argv) {
   gustann::GustANN a(dtype);
 
 #ifdef HYBRID_CALC
-  gustann::HybridExecutorConfig config;
-  config.mini_batch = batch;
-  config.thread_cnt = thread;
-  config.ctx_per_thread = ctx_per_thread;
-  config.use_backend = gustann::HybridExecutorConfig::MEMORY;
-  a.init_hybrid(index_file, config);
+  gustann::HybridExecutorConfig hybrid_config;
+  hybrid_config.mini_batch = batch;
+  hybrid_config.thread_cnt = thread;
+  hybrid_config.ctx_per_thread = ctx_per_thread;
+  hybrid_config.use_backend = gustann::HybridExecutorConfig::MEMORY;
+  hybrid_config.ssd_lists = ssd_lists;
+  a.init_hybrid(search_config, hybrid_config);
 #else
-  a.init_bam(config, index_file, copy_data);
+  a.init_bam(search_config, bam_config, copy_data);
   if (only_copy) return 0;
 #endif
-
-
-  gustann::PQSearch pq_search;
-  pq_search.read_data(pq_data + "_pivots.bin",
-                      pq_data + "_compressed.bin"
-                      );
   
   size_t d, nq;
   //float* 
@@ -158,7 +157,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<float[]> dis(new float [nq * topk]);
   std::unique_ptr<int[]> found_cnt(new int[nq]);
   
-  a.search(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get(), search_config, &pq_search);
+  a.search(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get());
 
 
   

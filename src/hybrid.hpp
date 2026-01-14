@@ -4,6 +4,7 @@
 #include "layout.hpp"
 #include "common.hpp"
 #include "pq_search.hpp"
+#include "nav_graph.hpp"
 #include "io/interface.hpp"
 
 namespace gustann {
@@ -22,7 +23,7 @@ namespace gustann {
     HybridExecutor(const Layout &layout, const DataType &data_type, const std::string &fpath, const HybridExecutorConfig& config);
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
-                const Config& config, PQSearch* pq = nullptr);
+                PQSearch *pq = nullptr, NavGraph *nav = nullptr);
   private:
     Layout layout_;
     DataType data_type_;

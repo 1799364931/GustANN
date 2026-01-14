@@ -27,11 +27,6 @@ namespace gustann {
     L2,
   };
 
-  struct Config {
-    std::string nav_data = "";
-    std::vector<std::string> ssd_list;
-  };
-
   static double elapsed() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);

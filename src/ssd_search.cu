@@ -82,28 +82,60 @@ namespace gustann {
          layout_.nodes_per_page,
          layout_.num_pages);
   }
+
+  void GustANN::init_gustann_internal(const GustANNConfig &config) {
+    parse_diskann_metadata(config.index_file);
+    // Initialize PQ search if pq_file_prefix is provided
+    INFO("PQ {}, NAV {}", config.pq_file_prefix, config.nav_graph_prefix);
+    if (!config.pq_file_prefix.empty()) {
+      pq_ = new PQSearch();
+      std::string pq_pivots_file = config.pq_file_prefix + "_pivots.bin";
+      std::string pq_compressed_file = config.pq_file_prefix + "_compressed.bin";
+      pq_->read_data(pq_pivots_file, pq_compressed_file);
+    } else {
+      ERROR("PQ file not set!");
+      throw;
+    }
+    
+    // Initialize navigation graph if use_nav_graph is true
+    if (!config.nav_graph_prefix.empty()) {
+      nav_ = new NavGraph();
+      std::string nav_index_file = config.nav_graph_prefix + "/" + "nav_index";
+      std::string nav_data_file = config.nav_graph_prefix + "/" + "nav_index.data";
+      std::string nav_map_file = config.nav_graph_prefix + "/" + "map.txt";
+      nav_->init(nav_index_file, nav_data_file, nav_map_file);
+    } else {
+      INFO("Not using Nav Graph!");
+    }
+  }
+  
+
 #ifdef USE_BAM  
-  void GustANN::init_bam(const BaMConfig& config, const std::string& fpath, bool copy) {
-    parse_diskann_metadata(fpath);
-    DEBUG("{} {}", layout_.node_size * layout_.nodes_per_page, config.page_size);
-    ASSERT(layout_.node_size * layout_.nodes_per_page <= config.page_size);
+  void GustANN::init_bam(const GustANNConfig& gustann_config, const BaMConfig& bam_config, bool copy) {
+
+    init_gustann_internal(gustann_config);
+    DEBUG("{} {}", layout_.node_size * layout_.nodes_per_page, bam_config.page_size);
+    ASSERT(layout_.node_size * layout_.nodes_per_page <= bam_config.page_size);
 
     search_type = BAM;
-    executor_.bam = new BaMExecutor(fpath, layout_, data_type_, config, copy);
+    executor_.bam = new BaMExecutor(gustann_config.index_file, layout_, data_type_, bam_config, copy);
+
+    
 
     //page_size_ = config.page_size;
     DEBUG("Initialization finished");
   }
 #endif
 
-
-
-  void GustANN::init_hybrid(const std::string& fpath, const HybridExecutorConfig& config) {
-
-    parse_diskann_metadata(fpath);
-    
+  void GustANN::init_hybrid(const GustANNConfig &gustann_config,
+                            const HybridExecutorConfig &hybrid_config) {
+    init_gustann_internal(gustann_config);
     search_type = HYBRID;
-    executor_.hybrid = new HybridExecutor(layout_, data_type_, fpath, config);
+
+    executor_.hybrid = new HybridExecutor(layout_, data_type_, gustann_config.index_file, hybrid_config);
+    
+
+    
     DEBUG("Initialization finished");
   }
 
@@ -114,15 +146,14 @@ namespace gustann {
 #ifdef USE_BAM
     if (search_type == BAM) {
       executor_.bam->search(qdata, num_queries_, topk, ef_search, nns, distances,
-                   found_cnt, config, pq_);
+                   found_cnt, pq_, nav_);
       return;
     }
 #endif
-// TODO: walkaround!
 
     if (search_type == HYBRID) {
       executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
-                               distances, found_cnt, config, pq);
+                               distances, found_cnt, pq_, nav_);
       return;
     }
 

@@ -10,9 +10,9 @@
 namespace gustann {
 
   class GustANNConfig {
-    std::string index_prefix;
+  public:
+    std::string index_file;
     std::string pq_file_prefix;
-    bool use_nav_graph;
     std::string nav_graph_prefix;
   };
   
@@ -48,13 +48,13 @@ namespace gustann {
     }
     void parse_diskann_metadata(const std::string &fpath);
 
-    void init_gustann_internal();
+    void init_gustann_internal(const GustANNConfig& config);
   public:
     GustANN(DataType = FLOAT);
 #ifdef USE_BAM
-    void init_bam(const BaMConfig &config, const std::string &fpath, bool copy);
+    void init_bam(const GustANNConfig& gustann_config, const BaMConfig& bam_config, bool copy);
 #endif
-    void init_hybrid(const std::string& fpath, const HybridExecutorConfig& config);
+    void init_hybrid(const GustANNConfig& gustann_config, const HybridExecutorConfig& hybrid_config);
 
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt);  

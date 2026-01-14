@@ -11,6 +11,7 @@
 #include "layout.hpp"
 #include "pq_search.hpp"
 #include "common.hpp"
+#include "nav_graph.hpp"
 
 namespace gustann {
   struct BaMConfig {
@@ -32,7 +33,7 @@ namespace gustann {
     BaMExecutor(const std::string &fpath, const Layout& layout, const DataType& data_type, const BaMConfig& config, bool copy_data);
     void search(const float *qdata, const int num_queries_, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
-                const Config& config, PQSearch* pq);
+                PQSearch* pq, NavGraph* nav);
   private:
     struct BaMContext {
       std::vector<Controller *> ctrls;
