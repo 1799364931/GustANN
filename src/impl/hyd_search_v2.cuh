@@ -1,3 +1,5 @@
+#pragma once
+
 namespace gustann {
 
   __global__ void __launch_bounds__(128, 14)

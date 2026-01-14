@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
 #endif
 
 
-  PQSearch pq_search;
+  gustann::PQSearch pq_search;
   pq_search.read_data(pq_data + "_pivots.bin",
                       pq_data + "_compressed.bin"
                       );

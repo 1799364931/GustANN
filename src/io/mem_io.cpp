@@ -14,7 +14,7 @@ namespace gustann {
     MemLoaderSync(const char* filename, int64_t num_pages) {
       FILE *file = fopen(filename, "rb");
       if (!file) {
-        ERROR("Faile to open Mem Index");
+        ERROR("Failed to open Mem Index");
         exit(-1);
       }
       index = new uint8_t [num_pages * PAGE_SIZE];

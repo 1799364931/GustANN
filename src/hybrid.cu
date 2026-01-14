@@ -25,9 +25,17 @@
 
 #include "nav_graph.hpp"
 #include "ssd_search.hpp"
-#include "ssd_search_kernel.hpp"
+//#include "ssd_search_kernel.hpp"
 
 #include "io/interface.hpp"
+
+#include "impl/hyd.cuh"
+#include "impl/util.cuh"
+#include "impl/nav.cuh"
+#include "impl/pq.cuh"
+
+#include "impl/hyd_search_v1.cuh"
+#include "impl/hyd_search_v2.cuh"
 
 #define REPORT(fmt, ...) printf("[REPORT] " fmt "\n", __VA_ARGS__)
 
@@ -37,55 +45,6 @@
 //#define CACHE_START
 
 namespace gustann {
-
-
-  
-
-  __global__ void init_search(float* qdata, PQSearchData* pq_data, int stream_offset, int dim);
-
-  // VERSION A
-  __global__ void get_pq_dist_kernel(uint8_t *buffer, int32_t *request,
-                                     float *tmp_dist, int *tmp_id,
-                                     PQSearchData* pq_data,
-                                     int nodes_per_page, int node_len, int data_len,
-                                     int pq_offset, int max_m0);
-
-  
-  __global__ void update_kernel
-  (float* qdata, uint8_t* buffer, int32_t* request,
-   float* tmp_dist, int* tmp_id,
-   const int num_nodes, const int num_dims, const int max_m,
-   const int ef_search, const int topk,
-   int* nns, float* distances, int* found_cnt,
-   int64_t* acc_visited_cnt,
-   uint32_t* neighbor_id, float* neightbor_dist,
-   int nodes_per_page, int node_len, int data_len, Data* data, int qcnt);
-
-  __global__ void get_entry_kernel
-  (float* qdata_global, uint8_t* data_g, int* graph, int qcnt,
-   const int num_nodes, const int num_dims, const int max_m,
-   const int ef_search, const int entry, int* result,
-   uint32_t* neighbor_id, float* neighbor_dist
-   );
-
-  // VERSION B
-  __global__ void merge_data_kernel
-  (uint8_t *buffer, int32_t *request,
-   //PQSearchData* pq_data,
-   int num_chunks, float* pq_dists, uint8_t *compressed_data, 
-   int nodes_per_page, int node_len, int data_len,
-   int pq_offset, 
-   const int max_m, const int ef_search, 
-   uint32_t* neighbor_id, float* neighbor_dist, Data* data);
-
-  __global__ void unify_kernel
-  (float* qdata, uint8_t* buffer, int32_t* request,
-   const int num_dims,
-   const int max_m, const int ef_search,  const int topk,
-   int* nns, float* distances, int* found_cnt,
-   uint32_t* neighbor_id, float* neighbor_dist,
-   int nodes_per_page, int node_len, int data_len, Data* data,
-   int qcnt);
 
   __global__ void copy_page(uint8_t* dest, uint8_t* src, int32_t* request, const int data_len, const int data_cnt) {
     int tid = threadIdx.x;
@@ -103,6 +62,7 @@ namespace gustann {
     }
   }
 
+  
   struct TaskRunner {
 
     float* d_qdata; // (mini_batch * num_dims_);
