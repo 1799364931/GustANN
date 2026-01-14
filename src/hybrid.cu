@@ -622,7 +622,7 @@ namespace gustann {
     
     FILE *input = fopen(fpath.c_str(), "rb");
     if (!input) {
-      ERROR("Index File Not found!");
+      ERROR("Failed to open index file: {}", fpath);
       exit(-1);
     }
     

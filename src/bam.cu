@@ -51,6 +51,10 @@ namespace gustann {
     DEBUG("start copy, total page {}", layout_.num_pages);
     //std::ifstream input(fpath, std::ios::binary);
     FILE* input = fopen(fpath.c_str(), "rb");
+    if (!input) {
+      ERROR("Failed to open file: {}", fpath);
+      exit(-1);
+    }
     uint8_t* buff;
 
     uint64_t copy_block_cnt = 112 * 4;
@@ -160,6 +164,10 @@ namespace gustann {
 
   void BaMExecutor::read_to_mem(const std::string &fpath) {
     FILE* input = fopen(fpath.c_str(), "rb");
+    if (!input) {
+      ERROR("Failed to open file: {}", fpath);
+      exit(-1);
+    }
     fseek(input, page_size_, SEEK_SET);
     CHECK_CUDA(cudaHostAlloc(&mem_data_, layout_.num_pages * page_size_, cudaHostAllocPortable));
     uint8_t* mem_data_host = mem_data_; //new uint8_t[num_pages_ * page_size_];

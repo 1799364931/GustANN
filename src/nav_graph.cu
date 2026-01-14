@@ -16,6 +16,10 @@ namespace gustann {
    std::string data_file,
    std::string map_file) {
     FILE* f = fopen(data_file.c_str(), "r");
+    if (!f) {
+      ERROR("Failed to open data file: {}", data_file);
+      exit(-1);
+    }
     fread(&num_node, sizeof(int), 1, f);
     fread(&data_len, sizeof(int), 1, f);
     data = new uint8_t [1ll * num_node * data_len * data_size];
@@ -24,6 +28,10 @@ namespace gustann {
  
     fclose(f);
     f = fopen(map_file.c_str(), "r");
+    if (!f) {
+      ERROR("Failed to open map file: {}", map_file);
+      exit(-1);
+    }
 
     for (int i = 0; i < num_node; i++) {
       int x;
@@ -34,6 +42,10 @@ namespace gustann {
 
     fclose(f);
     f = fopen(index_file.c_str(), "r");
+    if (!f) {
+      ERROR("Failed to open index file: {}", index_file);
+      exit(-1);
+    }
     int dummy;
     fread(&dummy, sizeof(int), 1, f);
     fread(&dummy, sizeof(int), 1, f);
