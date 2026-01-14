@@ -20,7 +20,6 @@ namespace gustann {
     Layout layout_;
     
     uint64_t page_size_;
-    uint8_t* mem_data_;
     
     DataType data_type_;
 
@@ -57,6 +56,22 @@ namespace gustann {
     void init_hybrid(const GustANNConfig& gustann_config, const HybridExecutorConfig& hybrid_config);
 
     void search(const float *qdata, const int num_queries, const int topk,
-                const int ef_search, int *nns, float *distances, int *found_cnt);  
+                const int ef_search, int *nns, float *distances,
+                int *found_cnt);
+
+    ~GustANN() {
+      if (pq_)
+        delete pq_;
+      if (nav_)
+        delete nav_;
+#ifdef USE_BAM
+      if (search_type == BAM) {
+        if (executor_.bam) delete executor_.bam;
+      }
+#endif
+      if (search_type == HYBRID) {
+        if (executor_.hybrid) delete executor_.hybrid;
+      }
+    }
   };
 } // namespace gustann

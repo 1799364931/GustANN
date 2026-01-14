@@ -22,7 +22,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CUDA_ARCHITECTURES "70;80;90")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(GUSTANN_USE_BAM "Enable BaM support" ON)
+option(GUSTANN_USE_BAM "Enable BaM support" OFF)
 option(GUSTANN_USE_SPDK "Enable SPDK (Storage Performance Development Kit) support" ON)
 message(${GUSTANN_USE_BAM} ${GUSTANN_USE_SPDK})
 

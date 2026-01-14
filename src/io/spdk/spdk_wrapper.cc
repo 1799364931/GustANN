@@ -17,8 +17,12 @@ private:
 
  public:
   void Init(const std::vector<std::string>& _use_ssds) override {
-    
-    INFO0("Initializing NVMe Controllers");
+
+    INFO("Initializing NVMe Controllers, {} SSDs", _use_ssds.size());
+
+    for (auto ssds : _use_ssds) {
+      INFO("Using SSD {}", ssds);
+    }
 
     // See: https://github.com/spdk/spdk/commit/57fd99b91e71a4baa5543e19ff83958dc99d4dac
     opts_.opts_size = sizeof(opts_); 

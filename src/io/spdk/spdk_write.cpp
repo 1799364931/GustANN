@@ -21,6 +21,9 @@ int main(int argc, char** argv) {
       printf("USE SSD: \"%s\"\n", s.c_str());
       ssds.push_back(s);
     }
+  } else {
+    printf("SSD File not found!");
+    exit(-1);
   }
 
   spdk->Init(ssds);

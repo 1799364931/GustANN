@@ -636,6 +636,7 @@ namespace gustann {
 
 
     if (config.use_backend == HybridExecutorConfig::SPDK) {
+#ifdef USE_SPDK
       const auto& ssds = config.ssd_lists;
       if (ssds.empty()) {
         ERROR("NO SSD IN USE!");
@@ -643,6 +644,11 @@ namespace gustann {
       }
       loader_ = create_spdk_loader(ssds, mini_batch_ * ctx_per_thread_,
                                    thread_cnt_, thread_cnt_ * ctx_per_thread_);
+#else
+      ERROR("SPDK Not Supported! Please recompile with `cmake "
+            "-DGUSTANN_USE_SPDK=ON`");
+      exit(-1);
+#endif
     } else if (config.use_backend == HybridExecutorConfig::MEMORY) {
       loader_ = create_mem_loader_sync(fpath.c_str(), layout_.num_pages);
     } else {
