@@ -4,7 +4,7 @@
 
 namespace gustann {
   
-  using data_type = uint8_t;
+  //using data_type = uint8_t;
   //#define _IN_MEM
   static const int WARP_SIZE = 32;
 #ifdef _IN_MEM

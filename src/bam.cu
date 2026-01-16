@@ -237,7 +237,18 @@ namespace gustann {
     double t1 = elapsed();
     INFO("Init: {}", t1 - start);
 
-    search_disk_graph_kernel2<<<
+    auto kernel_func = search_disk_graph_kernel<uint8_t>;
+#pragma GCC diagnostics push
+#pragma GCC diagnostics error "-Wswtich"
+    switch (data_type_) {
+    case UINT8:
+      break;
+    case FLOAT:
+      kernel_func = search_disk_graph_kernel<float>;
+      break;
+    }
+#pragma GCC diagnostics pop
+    kernel_func<<<
       block_cnt_, (layout_.max_m0 + 31) / 32 * 32,
       (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + layout_.max_m0)
         >>>

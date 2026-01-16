@@ -10,8 +10,9 @@
 
 namespace gustann {
 
-  __global__ void __launch_bounds__(128, 14)
-    search_disk_graph_kernel2
+  template <class T>
+  __global__ void __launch_bounds__(128, 14)    
+    search_disk_graph_kernel
     (DiskData* data, float* qdata, const int num_dims,
      PQSearchData* pq_data,
      int nodes_per_page, int node_len, int data_len,
@@ -40,7 +41,7 @@ namespace gustann {
     float* tmp_dist = (float*)(tmp_id + ef_search + max_m);
     
     ReadCtx ctx;
-    static __shared__ GraphData<data_type> graph;
+    static __shared__ GraphData<T> graph;
     for (int qid = blockIdx.x; qid < qcnt; qid += gridDim.x) {
       __syncthreads();
       if (tid == 0) {
@@ -53,7 +54,7 @@ namespace gustann {
       
       while(u != -1) {
         if (tid == 0) {
-          graph = pager.get_graph<data_type>(u, ctx);
+          graph = pager.get_graph<T>(u, ctx);
         }
         __syncthreads();
         int sz = ctx_size;
