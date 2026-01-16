@@ -216,7 +216,7 @@ namespace gustann {
     int init_ef = std::min(ef_search, 5);
 
     if (nav_graph) {
-      get_entry_kernel<<<(num_queries + 1) / 2, 64, 0>>>(
+      get_entry_kernel(data_type_)<<<(num_queries + 1) / 2, 64, 0>>>(
           thrust::raw_pointer_cast(d_qdata.data()), nav_graph->data_dev,
           nav_graph->graph_dev, num_queries, nav_graph->num_node,
           layout_.num_dims, nav_graph->max_m, init_ef, nav_graph->start,

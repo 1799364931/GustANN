@@ -45,6 +45,74 @@ namespace gustann {
     return __shfl_sync(0xffffffff, val, 0);
   }
 
+  template <class T>
+  __inline__ __device__ float dot_sum_32(const float *a, T *b,
+                                         const int num_dims) {
+    __syncwarp();
+    
+    // figure out the warp/ position inside the warp
+    int warp = threadIdx.x / 32;
+    int lane = threadIdx.x % 32;
+    float val = 0;
+        
+    for (int i = lane; i < num_dims; i += 32) {
+      float _val = a[i] * (float)(b[i]);
+      val += _val;
+    }
+    __syncwarp();
+#pragma unroll
+    for (int offset = 32 / 2; offset > 0; offset /= 2) {
+      val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+    return __shfl_sync(0xffffffff, val, 0);
+  }
+
+  template <class T>
+  __inline__ __device__ float cos_similarity_32(const float *a, T *b,
+                                                const int num_dims) {
+    // 不一定需要显式的 __syncwarp，取决于上下文，但保留原风格
+    __syncwarp(); 
+    
+    int lane = threadIdx.x % 32;
+    
+    // 1. 初始化三个累加器
+    float dot_sum = 0.0f;  // A dot B
+    float norm_a = 0.0f;   // sum(A^2)
+    float norm_b = 0.0f;   // sum(B^2)
+    
+    // 2. 循环累加
+    for (int i = lane; i < num_dims; i += 32) {
+      float val_a = a[i];
+      float val_b = (float)(b[i]); // 将 T 类型转为 float
+      
+      dot_sum += val_a * val_b;
+      norm_a  += val_a * val_a;
+      norm_b  += val_b * val_b;
+    }
+    
+    // 3. Warp 内归约 (Reduction)
+    // 需要同时对三个值进行 shuffle reduce
+#pragma unroll
+    for (int offset = 16; offset > 0; offset /= 2) {
+      dot_sum += __shfl_down_sync(0xffffffff, dot_sum, offset);
+      norm_a  += __shfl_down_sync(0xffffffff, norm_a, offset);
+      norm_b  += __shfl_down_sync(0xffffffff, norm_b, offset);
+    }
+    
+    // 4. 广播结果到 Warp 内所有线程 (Broadcast)
+    // 因为返回值是在每个线程中使用的，所以这里仍然需要 sync 广播
+    float final_dot = __shfl_sync(0xffffffff, dot_sum, 0);
+    float final_norm_a = __shfl_sync(0xffffffff, norm_a, 0);
+    float final_norm_b = __shfl_sync(0xffffffff, norm_b, 0);
+    
+    // 5. 计算余弦相似度
+    // 增加一个极小值 1e-6f 防止除以零
+    float similarity = final_dot / (sqrtf(final_norm_a) * sqrtf(final_norm_b) + 1e-6f);
+    
+    // 如果你需要严格的 "Cosine Distance" (0到2之间)，请返回: 1.0f - similarity;
+    return similarity;
+  }
+  
   __inline__ __device__ void retset_push_32(float* distance, int* idx, int& size, int max_size, float value, int value_idx) {
     int warp = threadIdx.x / 32;
     int lane = threadIdx.x % 32;

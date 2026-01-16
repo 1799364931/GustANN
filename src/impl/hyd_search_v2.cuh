@@ -1,5 +1,8 @@
 #pragma once
 
+#include "hyd.cuh"
+#include "util.cuh"
+
 namespace gustann {
 
   __global__ void __launch_bounds__(128, 14)
@@ -347,6 +350,7 @@ namespace gustann {
     */
   }
 
+  template <class T>
   __global__ void unify_kernel
   (float* qdata, uint8_t* buffer, int32_t* request,
    const int num_dims,
@@ -369,7 +373,7 @@ namespace gustann {
     //if (threadIdx.x == 0) printf("%d\n", node_u);
     int buffer_offset = node_u % nodes_per_page * node_len;
     
-    data_type* buffer_u = (data_type *)(buffer + bid * 4096 + buffer_offset);
+    T* buffer_u = (T *)(buffer + bid * 4096 + buffer_offset);
     float dist = square_sum_32(src_vec, buffer_u, num_dims);    
     retset_push_32(distances + bid * topk, nns + bid * topk, found_cnt[bid],
                    topk, dist, node_u);

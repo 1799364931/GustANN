@@ -22,11 +22,11 @@ int main(int argc, char **argv) {
   std::string query_file ;
   std::string gt_file;
   
-#ifdef FLOAT_DATA
-  std::string data_type = "float";
-#else
-  std::string data_type = "uint8";
-#endif
+
+
+
+  std::string data_type;
+
   
   int topk = 100;
   int ef_search = 300;
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
   program.add_argument("--query").required().store_into(query_file);
   program.add_argument("--index").required().store_into(search_config.index_file);
   program.add_argument("--ground_truth").store_into(gt_file);
-  //program.add_argument("--data_type").store_into(data_type);
+  program.add_argument("--data_type").required().store_into(data_type);
   program.add_argument("--topk").store_into(topk);
   program.add_argument("--ef_search").store_into(ef_search);  
   program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
@@ -117,10 +117,10 @@ int main(int argc, char **argv) {
   hybrid_config.thread_cnt = thread;
   hybrid_config.ctx_per_thread = ctx_per_thread;
   if (io_backend == "memory") {
-    INFO("Use Memory Backend")
+    INFO("Use Memory Backend");
     hybrid_config.use_backend = gustann::HybridExecutorConfig::MEMORY;
   } else if (io_backend == "spdk") {
-    INFO("Use SPDK Backend")
+    INFO("Use SPDK Backend");
     hybrid_config.use_backend = gustann::HybridExecutorConfig::SPDK;
   } else {
     ERROR("unrecognized io_backend: {}, must be 'memory' or 'spdk'", io_backend);

@@ -1,12 +1,17 @@
 #pragma once
 
+#include "../common.hpp"
+#include "util.cuh"
+
+
 namespace gustann {
 
 
 #if 1
   const int L = 4;
   const int R = 28;
-  inline __global__ void get_entry_kernel
+  template <class data_type>
+  inline __global__ void get_entry_kernel_inner
   (float* qdata_global, uint8_t* data_g, int* graph, int qcnt,
    const int num_nodes, const int num_dims, const int max_m,
    const int ef_search, const int entry, int* result,
@@ -129,7 +134,18 @@ namespace gustann {
     //if (tid == 0) printf("!!!! %d %d\n", buffer_id, result[buffer_id]);
   }
 
-  
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
+  inline auto get_entry_kernel(DataType data_type) {
+    using FuncType = decltype(&get_entry_kernel_inner<uint8_t>);
+    switch (data_type) {
+    case UINT8:
+      return (FuncType) get_entry_kernel_inner<uint8_t>;
+    case FLOAT:
+      return (FuncType) get_entry_kernel_inner<float>;
+    }
+  }
+#pragma GCC diagnostics pop
   
 #else
   // Based on naiive CuHNSW style search

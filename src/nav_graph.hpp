@@ -14,10 +14,10 @@ namespace gustann {
     int num_node;
     int start;
     int max_m;
-  
-    void init(std::string index_file,
-              std::string data_file,
-              std::string map_file);
+
+    void init(std::string index_file, std::string data_file,
+              std::string map_file, int data_size
+    );
 
     void translate(int* entry, int qcnt);
   };

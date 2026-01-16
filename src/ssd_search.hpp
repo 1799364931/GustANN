@@ -29,7 +29,7 @@ namespace gustann {
 #endif
       HybridExecutor* hybrid;
     } executor_;
-
+    
     PQSearch *pq_ = nullptr;
     NavGraph *nav_ = nullptr;
 
@@ -40,10 +40,13 @@ namespace gustann {
     } search_type = UNINITED;
 
     size_t get_data_size() const {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
       switch (data_type_) {
       case FLOAT: return sizeof(float);
-      case UINT8: return sizeof(uint8_t);      
+      case UINT8: return sizeof(uint8_t);
       }
+#pragma GCC diagnostics pop
     }
     void parse_diskann_metadata(const std::string &fpath);
 

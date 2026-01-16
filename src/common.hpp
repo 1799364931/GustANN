@@ -20,9 +20,11 @@
 namespace gustann {
 
   enum DataType {
-    FLOAT,
-    UINT8,
+    UINT8 = 0,
+    FLOAT = 1,
   };
+
+
   enum DistFunc {
     L2,
   };

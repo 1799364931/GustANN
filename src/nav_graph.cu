@@ -5,16 +5,10 @@
 #include <algorithm>
 
 namespace gustann {
-#ifdef FLOAT_DATA
-  const int data_size = 4;
-#else
-  const int data_size = 1;
-#endif
 
-  void NavGraph::init
-  (std::string index_file,
-   std::string data_file,
-   std::string map_file) {
+void NavGraph::init(std::string index_file, std::string data_file,
+                    std::string map_file, int data_size
+) {
     FILE* f = fopen(data_file.c_str(), "r");
     if (!f) {
       ERROR("Failed to open data file: {}", data_file);

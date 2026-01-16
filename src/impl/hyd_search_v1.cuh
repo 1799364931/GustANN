@@ -1,4 +1,5 @@
 #pragma once
+#include "hyd.cuh"
 #include "pq.cuh"
 #include "util.cuh"
 
@@ -183,7 +184,8 @@ namespace gustann {
     cand = __shfl_sync(0xffffffff, cand, 0);
     return cand;
   }
-  
+
+  template <class data_type>
   __global__ void update_kernel
   (float* qdata, uint8_t* buffer, int32_t* request,
    float* tmp_dist, int* tmp_id,

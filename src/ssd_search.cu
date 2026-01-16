@@ -103,7 +103,7 @@ namespace gustann {
       std::string nav_index_file = config.nav_graph_prefix + "/" + "nav_index";
       std::string nav_data_file = config.nav_graph_prefix + "/" + "nav_index.data";
       std::string nav_map_file = config.nav_graph_prefix + "/" + "map.txt";
-      nav_->init(nav_index_file, nav_data_file, nav_map_file);
+      nav_->init(nav_index_file, nav_data_file, nav_map_file, get_data_size());
     } else {
       INFO("Not using Nav Graph!");
     }
