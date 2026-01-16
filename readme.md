@@ -11,6 +11,7 @@ Welcome to the artifact repository of SIGMOD'26 paper: *High-Throughput, Cost-Ef
 + SSD: ~700GB for SIFT and ~1TB for DEEP (both containing 1B vectors). Multiple SSDs are supported. 
   - Note that we use SPDK to manage the SSDs, so there should be no partitions or filesystems on SSDs 
   - You may use `nvme format` to format the disk. **This will erase all data on the disk. Do this at your own risk!**
+  - Alternatively, you can use in-memory index.
 + GPU: ~40GB GPU memory for billion-scale vector search (e.g., NVIDIA A100)
 + Root privillege for SPDK library.
 + Vector dataset: less than 2B vectors to avoid integer overflow, each record size (`vector_size + 4 + 4 * num_neighbors`) is less than 4KB. 
@@ -35,7 +36,7 @@ $ git clone https://github.com/thustorage/GustANN.git --recursive
 $ cd GustANN
 ```
 
-Then, build the SPDK dependency:
+Then, build the SPDK dependency (optional):
 
 ``` shell-session
 $ cd deps/spdk
@@ -45,7 +46,7 @@ $ make -j
 $ cd ../..
 ```
 
-Then, build DiskANN:
+Then, build DiskANN (for index building only):
 
 ``` shell-session
 $ cd deps/DiskANN
@@ -66,6 +67,7 @@ $ make -j
 $ cd ..
 ```
 
+Note that if you do not need SPDK support, you can run `cmake` with `-DCMAKE_USE_SPDK=OFF`.
 
 ## Dataset and Index Preparation
 
@@ -89,7 +91,8 @@ Then, you can build the index using the following command:
 $ ./deps/DiskANN/build/apps/build_disk_index --data_type uint8/float --dist_fn l2 --index_path_prefix <index_prefix> --data_path <dataset_file> -B <pq_size> -M <memory> -R 128 -L 200 
 ```
 
-The key parameters are specified like this:
+The key arguments are specified like this:
+
 + `index_prefix`: the directory and the name of the index. For example, if you use `/data/index`, then DiskANN will create index files with this prefix (e.g., `/data/index_disk.index`).
 + `dataset_file`: the dataset in `bin` format
 + `pq_size`: Size of the compressed product quantilization (PQ) vectors. Type 3.3 for 100M-scale datasets, 33 for 1B-scale datasets. This setting will generate 32-bit PQ vectors.
@@ -115,9 +118,38 @@ $ ./scripts/gen_pivot_graph.sh
 
 ## Run GustANN
 
-Note that you need to root privilege to execute GustANN (required by SPDK).
+### Quickstart: in-memory GPU search
 
-### Setup SPDK
+``` shell-session
+$ ./build/bin/search_disk_hybrid --query <query_file> --index <index_file> --ground_truth <ground_truth> --pq_data <pq_file> --nav_graph <nav_graph> --data_type <data_type> --io_backend memory --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> --ssd_list_file <ssd_list>
+```
+
+The meanings of each arguments are shown as follows:
+
++ `query_file`: The query vectors (in `bvecs`/`fvecs` format)
++ `index_file`: The DiskANN index
++ `ground_truth`: The ground truth (in `ivecs` format)
++ `pq_file`: The product quantilization (PQ) of all vectors (only need to type `<prefix>_pq`)
++ `nav_graph`: The additional GustANN index (the `nav/` directory)
++ `data_type`: `uint8` for SIFT dataset, `float` for DEEP dataset. For other datasets, please refer to their documents.
++ `topk`: How many top-k vectors are searched
++ `L`: How many vectors are stored during the search (The higher, the more accurate)
++ `B`: The minibatch size (1120 in the evaluation)
++ `T`: How many worker threads (40 to reach maximum throughput)
++ `C`: How many minibatches for each thread (1 is enough)
++ `R`: Repeat the query `R` times. Set it to greater than 1 for a more accurate throughput benchmark, if the query set is small.
+
+Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
+
+``` shell-session
+$ ./scripts/run.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R>
+```
+
+### Run with SPDK (optional)
+
+**Note that you need to root privilege to run GustANN-SPDK!**
+
+#### Setup SPDK
 
 ``` shell-session
 # ./deps/spdk/scripts/setup.sh # Setup SPDK Environment
@@ -153,7 +185,7 @@ Collect all PCIe addresses for the SSDs you want you use in the format of XXXX:X
 0000:8e:00.0
 ```
 
-### Write Index to SSD
+#### Write Index to SSD
 
 Then, write the index contents into the SSD using the following utility:
 
@@ -169,24 +201,21 @@ Alternatively, after modifying the `scripts/setup.sh`, you can also execute the 
 # ./scripts/write_spdk.sh
 ```
 
-### Execute GustANN
-
-For SIFT dataset (`uint8` datatype), run:
+#### Run GustANN
 
 ``` shell-session
-# ./build/bin/search_disk_hybrid --query <query_file> --index <index_file> --ground_truth <ground_truth> --pq_data <pq_file> --nav_graph <nav_graph> --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> --ssd_list_file <ssd_list>
+# ./build/bin/search_disk_hybrid --query <query_file> --index <index_file> --ground_truth <ground_truth> --pq_data <pq_file> --nav_graph <nav_graph> --data_type <data_type> --io_backend spdk --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> --ssd_list_file <ssd_list>
 ```
 
-For DEEP dataset (`float` datatype), use `search_disk_hybrid_float` executable instead.
-Other data types are not supported currently.
 
-The meaning of each parameter is shown as follows:
+The meanings of the arguments are shown as follows:
 
 + `query_file`: The query vectors (in `bvecs`/`fvecs` format)
 + `index_file`: The DiskANN index
 + `ground_truth`: The ground truth (in `ivecs` format)
 + `pq_file`: The product quantilization (PQ) of all vectors (only need to type `<prefix>_pq`)
 + `nav_graph`: The additional GustANN index (the `nav/` directory)
++ `data_type`: `uint8` for SIFT dataset, `float` for DEEP dataset. For other datasets, please refer to their documents.
 + `topk`: How many top-k vectors are searched
 + `L`: How many vectors are stored during the search (The higher, the more accurate)
 + `B`: The minibatch size (1120 in the evaluation)
@@ -200,8 +229,12 @@ After the search finishes, the runtime, total SSD I/Os, and the recall will be p
 Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
 
 ``` shell-session
-# ./scripts/run.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R>
+# ./scripts/run_spdk.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R>
 ```
+
+### GPU Direct-IO Support (Experimental)
+
+See [bam.md](bam.md)
 
 ## Paper
 

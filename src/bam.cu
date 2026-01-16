@@ -105,7 +105,9 @@ namespace gustann {
     }
     DEBUG("{} {}", tot_cnt, layout_.num_pages);
     ASSERT((tot_cnt == layout_.num_pages));
+#ifdef ASYNC_READ
     bam_data_.h_pc->clear_cache();
+#endif
     CHECK_CUDA(cudaDeviceSynchronize());
     double end = elapsed();
     CHECK_CUDA(cudaFreeHost(buff));

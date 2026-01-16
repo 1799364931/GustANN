@@ -43,7 +43,7 @@ case $DATA_TYPE in
         ;;
     float)
         DATA_SIZE=4
-        EXEC=search_disk_hybrid_float  
+        EXEC=search_disk_hybrid
         ;;
     *)
         echo "[ERROR] Unrecognized data type!"

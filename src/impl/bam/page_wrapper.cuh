@@ -60,8 +60,10 @@ namespace gustann {
     }    
     __inline__ __device__ void prefetch(int nodeid) {
       int block = get_block(nodeid);
-      //printf("Prefetch %d %d\n", nodeid, block);
-      disk->prefetch((uint64_t) block * page_size);
+      // printf("Prefetch %d %d\n", nodeid, block);
+#ifdef ASYNC_READ
+      disk->prefetch((uint64_t)block * page_size);
+#endif
     }
     __inline__ __device__ void drop(const ReadCtx& ctx) {
       disk->release_page(ctx.page, ctx.r, ctx.start_idx);
