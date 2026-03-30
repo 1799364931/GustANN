@@ -30,3 +30,12 @@ IF(GUSTANN_USE_BAM)
     PRIVATE "-O2" "-g"
   )
 ENDIF()
+
+add_executable(search_mem search_disk.cu)
+target_include_directories(search_mem PRIVATE "../src")
+target_link_libraries(search_mem PRIVATE gustann)
+target_compile_options(search_mem
+  PRIVATE "-lineinfo"
+  PRIVATE "-DUSE_PURE_MEM"
+  PRIVATE "-O2" "-g"
+)

@@ -8,6 +8,7 @@
 #include "common.hpp"
 #include "common_cuda.cuh"
 #include "hybrid.hpp"
+#include "pure_mem.hpp"
 #include "ssd_search.hpp"
 
 #include "nav_graph.hpp"
@@ -59,8 +60,8 @@ namespace gustann {
     READ_U64(input, _max_node_len);
     READ_U64(input, _nnodes_per_sector);
     layout_.max_m0 = ((_max_node_len - _disk_bytes_per_point) / sizeof(uint32_t)) - 1;
-    
-    // setting up concept of frozen points in disk index for streaming-DiskANN
+
+    // NOTE: These three parameters are unused. Align with PipeANN!
     size_t _num_frozen_points, _reorder_data_exists;
     READ_U64(input, _num_frozen_points);
     uint64_t file_frozen_id;
@@ -139,6 +140,12 @@ namespace gustann {
     DEBUG("Initialization finished");
   }
 
+  void GustANN::init_pure_mem(const GustANNConfig &gustann_config, bool use_gpu_mem) {
+    init_gustann_internal(gustann_config);
+    search_type = PURE_MEM;
+    executor_.pure_mem = new PureMemExecutor(gustann_config.index_file, layout_, data_type_, use_gpu_mem);
+  }
+
   void GustANN::search(const float *qdata, const int num_queries_,
                        const int topk, const int ef_search, int *nns,
                        float *distances, int *found_cnt) {
@@ -154,6 +161,12 @@ namespace gustann {
     if (search_type == HYBRID) {
       executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
                                distances, found_cnt, pq_, nav_);
+      return;
+    }
+
+    if (search_type == PURE_MEM) {
+      executor_.pure_mem->search(qdata, num_queries_, topk, ef_search, nns,
+                                 distances, found_cnt, pq_, nav_);
       return;
     }
 

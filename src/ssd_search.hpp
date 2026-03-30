@@ -6,6 +6,7 @@
 #include "common.hpp"
 #include "layout.hpp"
 #include "hybrid.hpp"
+#include "pure_mem.hpp"
 
 namespace gustann {
 
@@ -27,7 +28,8 @@ namespace gustann {
 #ifdef USE_BAM
       BaMExecutor* bam;
 #endif
-      HybridExecutor* hybrid;
+      HybridExecutor *hybrid;
+      PureMemExecutor* pure_mem;      
     } executor_;
     
     PQSearch *pq_ = nullptr;
@@ -36,7 +38,8 @@ namespace gustann {
     enum SearchType {
       UNINITED,
       BAM,
-      HYBRID
+      HYBRID,
+      PURE_MEM,
     } search_type = UNINITED;
 
     size_t get_data_size() const {
@@ -56,7 +59,9 @@ namespace gustann {
 #ifdef USE_BAM
     void init_bam(const GustANNConfig& gustann_config, const BaMConfig& bam_config, bool copy);
 #endif
-    void init_hybrid(const GustANNConfig& gustann_config, const HybridExecutorConfig& hybrid_config);
+    void init_hybrid(const GustANNConfig &gustann_config,
+                     const HybridExecutorConfig &hybrid_config);
+    void init_pure_mem(const GustANNConfig &gustann_config, bool use_gpu_mem);
 
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances,

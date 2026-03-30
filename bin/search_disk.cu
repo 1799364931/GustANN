@@ -21,10 +21,6 @@ int main(int argc, char **argv) {
   bool only_copy = false;
   std::string query_file ;
   std::string gt_file;
-  
-
-
-
   std::string data_type;
 
   
@@ -40,6 +36,8 @@ int main(int argc, char **argv) {
 
   gustann::GustANNConfig search_config;
 
+  bool use_gpu_mem = false; // For Pure memory
+
 #ifdef _USE_BAM
   program.add_argument("--num_ctrls").store_into(bam_config.num_ctrls);
   program.add_argument("--copy_data").store_into(copy_data);
@@ -54,7 +52,8 @@ int main(int argc, char **argv) {
   program.add_argument("--ef_search").store_into(ef_search);  
   program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
   program.add_argument("--nav_graph").store_into(search_config.nav_graph_prefix);
-
+  program.add_argument("--repeat", "-R").store_into(repeat);
+  
 #ifdef HYBRID_CALC
   program.add_argument("--minibatch", "-B").required().store_into(batch);
   program.add_argument("--thread", "-T").required().store_into(thread);
@@ -64,7 +63,10 @@ int main(int argc, char **argv) {
   program.add_argument("--ssd_list_file").store_into(ssd_list_file);
   program.add_argument("--io_backend").store_into(io_backend);
 #endif
-  program.add_argument("--repeat", "-R").store_into(repeat);
+
+#ifdef USE_PURE_MEM
+  program.add_argument("--use-gpu-mem", "-G").store_into(use_gpu_mem);
+#endif
   
   try {
     program.parse_args(argc, argv);
@@ -111,7 +113,7 @@ int main(int argc, char **argv) {
   
   gustann::GustANN a(dtype);
 
-#ifdef HYBRID_CALC
+#if defined(HYBRID_CALC)
   gustann::HybridExecutorConfig hybrid_config;
   hybrid_config.mini_batch = batch;
   hybrid_config.thread_cnt = thread;
@@ -128,9 +130,13 @@ int main(int argc, char **argv) {
   }
   hybrid_config.ssd_lists = ssd_lists;
   a.init_hybrid(search_config, hybrid_config);
-#else
+#elif defined(_USE_BAM)
   a.init_bam(search_config, bam_config, copy_data);
   if (only_copy) return 0;
+#elif defined(USE_PURE_MEM)
+  a.init_pure_mem(search_config, use_gpu_mem);
+#else
+#error "No search config specified in compilation!"
 #endif
   
   size_t d, nq;
