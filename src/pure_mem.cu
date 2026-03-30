@@ -133,9 +133,10 @@ namespace gustann {
       kernel_func = search_disk_graph_kernel<float>;
       break;
     }
+    int block_dim = std::max((layout_.max_m0 + 31) / 32 * 32, 64l);
 #pragma GCC diagnostics pop
     kernel_func<<<
-      block_cnt, (layout_.max_m0 + 31) / 32 * 32,
+      block_cnt, block_dim,
       (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + layout_.max_m0)
         >>>
       (

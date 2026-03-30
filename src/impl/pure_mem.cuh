@@ -77,7 +77,7 @@ namespace gustann {
     uint32_t* tmp_id = (uint32_t*)(mv_dist + ef_search + max_m);
     float* tmp_dist = (float*)(tmp_id + ef_search + max_m);
     
-    static __shared__ GraphData<T> graph;
+    GraphData<T> graph;
     for (int qid = blockIdx.x; qid < qcnt; qid += gridDim.x) {
       __syncthreads();
       if (tid == 0) {
@@ -88,13 +88,10 @@ namespace gustann {
       pq_data->init_query(src_vec);
       int u = entries[qid];
       
-      while(u != -1) {
-        if (tid == 0) {
-          //printf("%d!!\n", u);
-          graph = pager.get_graph<T>(u);
-          //printf("%d %d!!\n", graph.deg, graph[0]);
-        }
-        __syncthreads();
+      while(u != -1) {   
+        //printf("%d!!\n", u);
+        graph = pager.get_graph<T>(u);
+        //printf("%d %d!!\n", graph.deg, graph[0]);
         int sz = ctx_size;
         const int& deg = graph.deg;
         if (tid >= graph.deg) {
