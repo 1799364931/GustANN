@@ -32,8 +32,8 @@ namespace gustann {
     ASSERT((nr == 4 || nr == 5) &&
            nc == 1); // PipeANN (and older version of DiskANN) use (nr == 5),
                      // while new verison of DiskANN use nr == 4.
-    
-    DEBUG("Metadata: {} {} {} {} {}", basic_offsets[0], basic_offsets[1], basic_offsets[2], basic_offsets[3], (nr == 5 ? basic_offsets[4] : basic_offsets[3]));
+    bool use_legacy = (nr == 5);
+    DEBUG("Metadata: {} {} {} {} {}", basic_offsets[0], basic_offsets[1], basic_offsets[2], basic_offsets[3], (nr == 5 ? basic_offsets[4] : -1));
 
     DEBUG("Reading pivots");
     read_bin(table_file, nr, host_data.dim, basic_offsets[0], host_data.pivots);
@@ -53,11 +53,13 @@ namespace gustann {
     // For compatibility, PipeANN still contains this field.
     // Therefore for new DiskANN (nr == 4), chunk offsets is in basic_offset[2]
     // but in PipeANN, it's in basic_offset[3]
-    int chunk_offset_idx = nr == 4 ? 2 : 3;
+    int chunk_offset_idx = use_legacy ? 3 : 2;
     
     DEBUG("Reading chunk offsets");
     int* chunk_offsets;
-    read_bin(table_file, nr, nc, basic_offsets[chunk_offset_idx], chunk_offsets);
+    read_bin(table_file, nr, nc, basic_offsets[chunk_offset_idx],
+             chunk_offsets);
+    DEBUG( "{} {} {}", nr, nc, chunk_offset_idx);
     ASSERT(nr == host_data.num_chunks + 1 && nc == 1);
     host_data.chunk_id = new int[host_data.dim];
     memset(host_data.chunk_id, -1, sizeof(int) * host_data.dim);
