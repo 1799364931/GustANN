@@ -123,36 +123,64 @@ namespace gustann {
     double t1 = elapsed();
     INFO("Init: {}", t1 - start);
 
-    auto kernel_func = search_disk_graph_kernel<uint8_t>;
+    if (use_gpu_mem_) {
+      auto kernel_func = search_graph_kernel_gpumem<uint8_t>;
+      switch (data_type_) {
+      case UINT8:
+        break;
+      case FLOAT:
+        kernel_func = search_graph_kernel_gpumem<float>;
+        break;
+      }
+      int block_dim = std::max((layout_.max_m0 + 31) / 32 * 32, 64l);
+      kernel_func<<<
+        block_cnt, block_dim,
+          (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + layout_.max_m0)
+          >>>
+        (
+          mem_data_,
+          thrust::raw_pointer_cast(d_qdata.data()),
+          layout_.num_dims,
+          pq->get_device_ptr(),
+          layout_.nodes_per_page, layout_.node_size, layout_.data_size,
+          thrust::raw_pointer_cast(d_entries.data()),
+          layout_.max_m0, ef_search, topk,
+          thrust::raw_pointer_cast(d_nns.data()),
+          thrust::raw_pointer_cast(d_distances.data()),
+          thrust::raw_pointer_cast(d_found_cnt.data()),
+          num_queries
+        );
+    } else {
+      auto kernel_func = search_graph_kernel_dram<uint8_t>;
 #pragma GCC diagnostics push
 #pragma GCC diagnostics error "-Wswtich"
-    switch (data_type_) {
-    case UINT8:
-      break;
-    case FLOAT:
-      kernel_func = search_disk_graph_kernel<float>;
-      break;
-    }
-    int block_dim = std::max((layout_.max_m0 + 31) / 32 * 32, 64l);
+      switch (data_type_) {
+      case UINT8:
+        break;
+      case FLOAT:
+        kernel_func = search_graph_kernel_dram<float>;
+        break;
+      }
+      int block_dim = std::max((layout_.max_m0 + 31) / 32 * 32, 64l);
 #pragma GCC diagnostics pop
-    kernel_func<<<
-      block_cnt, block_dim,
-      (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + layout_.max_m0)
-        >>>
-      (
-        mem_data_,
-        thrust::raw_pointer_cast(d_qdata.data()),
-        layout_.num_dims,
-        pq->get_device_ptr(),
-        layout_.nodes_per_page, layout_.node_size, layout_.data_size,
-        thrust::raw_pointer_cast(d_entries.data()),
-        layout_.max_m0, ef_search, topk,
-        thrust::raw_pointer_cast(d_nns.data()), 
-        thrust::raw_pointer_cast(d_distances.data()), 
-        thrust::raw_pointer_cast(d_found_cnt.data()), 
-        num_queries
-      );
-
+      kernel_func<<<
+        block_cnt, block_dim,
+          (sizeof(int) * 3 + sizeof(float) * 2) * (ef_search + layout_.max_m0)
+          >>>
+        (
+          mem_data_,
+          thrust::raw_pointer_cast(d_qdata.data()),
+          layout_.num_dims,
+          pq->get_device_ptr(),
+          layout_.nodes_per_page, layout_.node_size, layout_.data_size,
+          thrust::raw_pointer_cast(d_entries.data()),
+          layout_.max_m0, ef_search, topk,
+          thrust::raw_pointer_cast(d_nns.data()), 
+          thrust::raw_pointer_cast(d_distances.data()), 
+          thrust::raw_pointer_cast(d_found_cnt.data()), 
+          num_queries
+        );
+    }
     CHECK_CUDA(cudaDeviceSynchronize());
     double end = elapsed();
 
