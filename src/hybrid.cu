@@ -65,6 +65,22 @@ namespace gustann {
 #endif
     } else if (config.use_backend == HybridExecutorConfig::MEMORY) {
       loader_ = create_mem_loader_sync(fpath.c_str(), layout_.num_pages);
+    } else if (config.use_backend == HybridExecutorConfig::URING) {
+#ifdef USE_URING
+      loader_ = create_uring_loader(fpath.c_str(), thread_cnt_ * ctx_per_thread_);
+#else
+      ERROR("io_uring Not Supported! Please recompile with `cmake "
+            "-DGUSTANN_USE_URING=ON`");
+      exit(-1);
+#endif
+    } else if (config.use_backend == HybridExecutorConfig::AIO) {
+#ifdef USE_AIO
+      loader_ = create_aio_loader(fpath.c_str(), thread_cnt_ * ctx_per_thread_);
+#else
+      ERROR("AIO Not Supported! Please recompile with `cmake "
+            "-DGUSTANN_USE_AIO=ON`");
+      exit(-1);
+#endif
     } else {
       ERROR("Wrong IO Backend setting!");
       exit(-1);

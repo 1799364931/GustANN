@@ -15,6 +15,8 @@ namespace gustann {
     enum {
       SPDK,
       MEMORY,
+      URING,
+      AIO,
     } use_backend;    
     std::vector<std::string> ssd_lists;
   };

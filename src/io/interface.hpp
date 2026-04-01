@@ -30,5 +30,13 @@ namespace gustann {
                      int thread_cnt, int ctx_cnt
   );
 #endif
+
+#ifdef USE_URING
+  std::shared_ptr<IndexLoader> create_uring_loader(const char* filename, int ctx_cnt);
+#endif
+
+#ifdef USE_AIO
+  std::shared_ptr<IndexLoader> create_aio_loader(const char* filename, int ctx_cnt);
+#endif
 } // namespace gustann
 

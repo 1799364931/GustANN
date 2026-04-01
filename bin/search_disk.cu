@@ -124,8 +124,14 @@ int main(int argc, char **argv) {
   } else if (io_backend == "spdk") {
     INFO("Use SPDK Backend");
     hybrid_config.use_backend = gustann::HybridExecutorConfig::SPDK;
+  } else if (io_backend == "uring") {
+    INFO("Use io_uring Backend");
+    hybrid_config.use_backend = gustann::HybridExecutorConfig::URING;
+  } else if (io_backend == "aio") {
+    INFO("Use AIO Backend");
+    hybrid_config.use_backend = gustann::HybridExecutorConfig::AIO;
   } else {
-    ERROR("unrecognized io_backend: {}, must be 'memory' or 'spdk'", io_backend);
+    ERROR("unrecognized io_backend: {}, must be 'memory', 'spdk', 'uring', or 'aio'", io_backend);
     exit(-1);
   }
   hybrid_config.ssd_lists = ssd_lists;
