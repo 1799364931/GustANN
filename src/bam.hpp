@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "bam_config.hpp"
 #include "page_cache.h"
 #include "page_manager.hpp"
 
@@ -14,20 +15,6 @@
 #include "nav_graph.hpp"
 
 namespace gustann {
-  struct BaMConfig {
-    int num_ctrls = 1;
-    int queue_depth = 1024;
-    int num_queues = 1;
-    int cuda_device = 0;
-    int nvm_namespace = 1;
-    int page_size = 4096;
-    int num_page = 1024; // cached page
-    bool use_simple_cache = false;
-  };
-
-
-
-
   class BaMExecutor {
   public:
     BaMExecutor(const std::string &fpath, const Layout& layout, const DataType& data_type, const BaMConfig& config, bool copy_data);

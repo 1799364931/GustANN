@@ -1,14 +1,19 @@
 #pragma once
-#ifdef USE_BAM
-#include "bam.hpp"
-#endif
-#include "pq_search.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+#include "bam_config.hpp"
+#include "hybrid_config.hpp"
 #include "common.hpp"
 #include "layout.hpp"
-#include "hybrid.hpp"
-#include "pure_mem.hpp"
 
 namespace gustann {
+  class BaMExecutor;
+  class HybridExecutor;
+  class PureMemExecutor;
+  class PQSearch;
+  struct NavGraph;
 
   class GustANNConfig {
   public:
@@ -18,9 +23,7 @@ namespace gustann {
   };
   
   class GustANN {
-    Layout layout_;
-    
-    uint64_t page_size_;
+    Layout layout_;  
     
     DataType data_type_;
 
@@ -30,17 +33,21 @@ namespace gustann {
 #endif
       HybridExecutor *hybrid;
       PureMemExecutor* pure_mem;      
-    } executor_;
+    } search_executor_;
     
-    PQSearch *pq_ = nullptr;
-    NavGraph *nav_ = nullptr;
-
     enum SearchType {
-      UNINITED,
+      SEARCH_UNINITED,
       BAM,
       HYBRID,
       PURE_MEM,
-    } search_type = UNINITED;
+    } search_type = SEARCH_UNINITED;
+
+    enum BuildType {
+      BUILD_UNINITED,
+    } build_type = BUILD_UNINITED;
+
+    PQSearch *pq_ = nullptr;
+    NavGraph *nav_ = nullptr;
 
     size_t get_data_size() const {
 #pragma GCC diagnostic push
@@ -49,7 +56,9 @@ namespace gustann {
       case FLOAT: return sizeof(float);
       case UINT8: return sizeof(uint8_t);
       }
-#pragma GCC diagnostics pop
+#pragma GCC diagnostic pop
+      ASSERT(false);
+      return 0;
     }
 
     void init_gustann_internal(const GustANNConfig& config);
@@ -66,19 +75,6 @@ namespace gustann {
                 const int ef_search, int *nns, float *distances,
                 int *found_cnt);
 
-    ~GustANN() {
-      if (pq_)
-        delete pq_;
-      if (nav_)
-        delete nav_;
-#ifdef USE_BAM
-      if (search_type == BAM) {
-        if (executor_.bam) delete executor_.bam;
-      }
-#endif
-      if (search_type == HYBRID) {
-        if (executor_.hybrid) delete executor_.hybrid;
-      }
-    }
+    ~GustANN();
   };
 } // namespace gustann

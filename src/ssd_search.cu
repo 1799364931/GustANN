@@ -7,8 +7,12 @@
 
 #include "common.hpp"
 #include "common_cuda.cuh"
+#ifdef USE_BAM
+#include "bam.hpp"
+#endif
 #include "hybrid.hpp"
 #include "pure_mem.hpp"
+#include "pq_search.hpp"
 #include "ssd_search.hpp"
 
 #include "nav_graph.hpp"
@@ -19,6 +23,33 @@ namespace gustann {
 
   GustANN::GustANN(DataType data_type) {
     data_type_ = data_type;
+  }
+
+  GustANN::~GustANN() {
+    if (pq_) {
+      delete pq_;
+    }
+    if (nav_) {
+      delete nav_;
+    }
+#ifdef USE_BAM
+    if (search_type == BAM) {
+      if (search_executor_.bam) {
+        delete search_executor_.bam;
+      }
+    }
+#endif
+    if (search_type == HYBRID) {
+      if (search_executor_.hybrid) {
+        delete search_executor_.hybrid;
+      }
+    }
+
+    if (search_type == PURE_MEM) {
+      if (search_executor_.pure_mem) {
+        delete search_executor_.pure_mem;
+      }
+    }
   }
 
   void GustANN::init_gustann_internal(const GustANNConfig &config) {
@@ -56,11 +87,8 @@ namespace gustann {
     ASSERT(layout_.node_size * layout_.nodes_per_page <= bam_config.page_size);
 
     search_type = BAM;
-    executor_.bam = new BaMExecutor(gustann_config.index_file, layout_, data_type_, bam_config, copy);
-
+    search_executor_.bam = new BaMExecutor(gustann_config.index_file, layout_, data_type_, bam_config, copy);
     
-
-    //page_size_ = config.page_size;
     DEBUG("Initialization finished");
   }
 #endif
@@ -70,7 +98,7 @@ namespace gustann {
     init_gustann_internal(gustann_config);
     search_type = HYBRID;
 
-    executor_.hybrid = new HybridExecutor(layout_, data_type_, gustann_config.index_file, hybrid_config);
+    search_executor_.hybrid = new HybridExecutor(layout_, data_type_, gustann_config.index_file, hybrid_config);
     
 
     
@@ -80,7 +108,7 @@ namespace gustann {
   void GustANN::init_pure_mem(const GustANNConfig &gustann_config, bool use_gpu_mem) {
     init_gustann_internal(gustann_config);
     search_type = PURE_MEM;
-    executor_.pure_mem = new PureMemExecutor(gustann_config.index_file, layout_, data_type_, use_gpu_mem);
+    search_executor_.pure_mem = new PureMemExecutor(gustann_config.index_file, layout_, data_type_, use_gpu_mem);
   }
 
   void GustANN::search(const float *qdata, const int num_queries_,
@@ -89,20 +117,20 @@ namespace gustann {
       
 #ifdef USE_BAM
     if (search_type == BAM) {
-      executor_.bam->search(qdata, num_queries_, topk, ef_search, nns, distances,
+      search_executor_.bam->search(qdata, num_queries_, topk, ef_search, nns, distances,
                    found_cnt, pq_, nav_);
       return;
     }
 #endif
 
     if (search_type == HYBRID) {
-      executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
+      search_executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
                                distances, found_cnt, pq_, nav_);
       return;
     }
 
     if (search_type == PURE_MEM) {
-      executor_.pure_mem->search(qdata, num_queries_, topk, ef_search, nns,
+      search_executor_.pure_mem->search(qdata, num_queries_, topk, ef_search, nns,
                                  distances, found_cnt, pq_, nav_);
       return;
     }

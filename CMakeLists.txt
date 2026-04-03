@@ -12,6 +12,7 @@ project(
 
 enable_language(CUDA)
 enable_language(C)
+find_package(CUDAToolkit REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
@@ -47,4 +48,3 @@ add_subdirectory(deps/argparse)
 
 add_subdirectory(src)
 add_subdirectory(bin/)
-

@@ -1,3 +1,5 @@
+#include <cuda_runtime_api.h>
+
 #include "ssd_search.hpp"
 #include "spdlog/spdlog.h"
 #include <set>
