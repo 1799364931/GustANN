@@ -51,7 +51,6 @@ namespace gustann {
       }
 #pragma GCC diagnostics pop
     }
-    void parse_diskann_metadata(const std::string &fpath);
 
     void init_gustann_internal(const GustANNConfig& config);
   public:

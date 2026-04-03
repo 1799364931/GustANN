@@ -1,6 +1,6 @@
 add_subdirectory(io)
 
-add_library(gustann ssd_search.cu pq_search.cu hybrid.cu nav_graph.cu hyd_task_runner.cu pure_mem.cu)
+add_library(gustann layout.cpp ssd_search.cu pq_search.cu hybrid.cu nav_graph.cu hyd_task_runner.cu pure_mem.cu)
 target_link_libraries(gustann
   PUBLIC spdlog argparse
   PRIVATE index_loader)
