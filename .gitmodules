@@ -7,9 +7,6 @@
 [submodule "deps/argparse"]
 	path = deps/argparse
 	url = https://github.com/p-ranav/argparse.git
-[submodule "deps/spdk"]
-	path = deps/spdk
-	url = https://github.com/spdk/spdk
 [submodule "deps/DiskANN"]
 	path = deps/DiskANN
 	url = https://github.com/microsoft/DiskANN

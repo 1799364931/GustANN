@@ -24,7 +24,7 @@ set(CMAKE_CUDA_ARCHITECTURES "70;80;90")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(GUSTANN_USE_BAM "Enable BaM support" OFF)
-option(GUSTANN_USE_SPDK "Enable SPDK (Storage Performance Development Kit) support" ON)
+option(GUSTANN_USE_SPDK "Enable SPDK (Storage Performance Development Kit) support" OFF)
 option(GUSTANN_USE_URING "Enable io_uring support" OFF)
 option(GUSTANN_USE_AIO "Enable libaio support" OFF)
 message(${GUSTANN_USE_BAM} ${GUSTANN_USE_SPDK})
