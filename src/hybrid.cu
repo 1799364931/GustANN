@@ -6,6 +6,7 @@
 #include <numeric>
 #include <string>
 #include <map>
+#include <memory>
 
 #include <sys/time.h>
 
@@ -24,6 +25,27 @@
 #define REPORT(fmt, ...) printf("[REPORT] " fmt "\n", __VA_ARGS__)
 
 namespace gustann {
+
+  namespace {
+    class HostRegisterGuard {
+    public:
+      HostRegisterGuard(void* ptr, size_t bytes) : ptr_(ptr) {
+        CHECK_CUDA(cudaHostRegister(ptr_, bytes, cudaHostRegisterDefault));
+      }
+
+      ~HostRegisterGuard() {
+        if (ptr_) {
+          cudaHostUnregister(ptr_);
+        }
+      }
+
+      HostRegisterGuard(const HostRegisterGuard&) = delete;
+      HostRegisterGuard& operator=(const HostRegisterGuard&) = delete;
+
+    private:
+      void* ptr_;
+    };
+  } // namespace
 
   HybridExecutor::HybridExecutor(const Layout &layout,
                                  const DataType &data_type,
@@ -88,13 +110,18 @@ namespace gustann {
 
   }
 
+  HybridExecutor::~HybridExecutor() {
+    delete[] starter_;
+  }
+
   void HybridExecutor::search(const float *qdata, int num_queries, int topk,
                              int ef_search, int *nns, float *distances, int *found_cnt,
                               PQSearch *pq_, NavGraph *nav_
                              ) {
     int batch_cnt = mini_batch_ * thread_cnt_ * ctx_per_thread_;
     //num_queries = 1;
-    CHECK_CUDA(cudaHostRegister((void*)qdata, sizeof(float) * num_queries * layout_.num_dims, cudaHostRegisterDefault));
+    HostRegisterGuard qdata_guard((void*)qdata,
+                                  sizeof(float) * num_queries * layout_.num_dims);
 
     if (pq_) {
       pq_->init_device(layout_.num_dims, layout_.num_data, batch_cnt,
@@ -106,8 +133,7 @@ namespace gustann {
     
     std::atomic<int> tot_reads(0);
 
-    int* start_pts = new int [num_queries];
-    memset(start_pts, -1, sizeof(int) * num_queries);
+    std::vector<int> start_pts(num_queries, -1);
 
     std::atomic<int> cur(0);
     //cur = 56521;
@@ -116,14 +142,16 @@ namespace gustann {
 
       bool finished = false;
       int tot_task = 0;
-      std::vector<TaskRunner> tasks;
+      std::vector<std::unique_ptr<TaskRunner>> tasks;
+      tasks.reserve(ctx_per_thread_);
       for (int i = 0; i < ctx_per_thread_; i++) {
-        tasks.emplace_back(threadid, threadid * ctx_per_thread_ + i,
-                           mini_batch_, (int)layout_.num_dims, topk,
-                           layout_.num_data, (int)layout_.max_m0, ef_search,
-                           (int)layout_.enter_point, starter_, pq_,
-                           (int)layout_.nodes_per_page, (int)layout_.node_size,
-                           (int)layout_.data_size, data_type_, loader_, nav_);       
+        tasks.emplace_back(std::make_unique<TaskRunner>(
+            threadid, threadid * ctx_per_thread_ + i,
+            mini_batch_, (int)layout_.num_dims, topk,
+            layout_.num_data, (int)layout_.max_m0, ef_search,
+            (int)layout_.enter_point, starter_, pq_,
+            (int)layout_.nodes_per_page, (int)layout_.node_size,
+            (int)layout_.data_size, data_type_, loader_, nav_));
       }
       double t0 = elapsed();
       INFO("Thread {} started", threadid);
@@ -131,7 +159,7 @@ namespace gustann {
       while(!finished) {
         finished = true;
         for (auto& task: tasks) {
-          if (task.update_state()) {
+          if (task->update_state()) {
             if (cur.load() < num_queries) {
               int qstart = cur.fetch_add(mini_batch_);             
               int qend = std::min(qstart + mini_batch_, num_queries);
@@ -145,11 +173,11 @@ namespace gustann {
                   }
                 }
 #endif
-                task.init_query(qdata + (int64_t) qstart * layout_.num_dims, qcnt,
-                                nns + qstart * topk,
-                                distances + qstart * topk,
-                                found_cnt + qstart,
-                                start_pts + qstart);
+                task->init_query(qdata + (int64_t) qstart * layout_.num_dims, qcnt,
+                                 nns + qstart * topk,
+                                 distances + qstart * topk,
+                                 found_cnt + qstart,
+                                 start_pts.data() + qstart);
                 finished = false;
               }
               tot_task += qcnt;
@@ -175,27 +203,27 @@ namespace gustann {
       std::map<std::pair<int, int>, int> tot_freq;
 #endif
       for (auto& task: tasks) {
-        tot_reads.fetch_add(task.num_reads);
-        tot_gpu += task.time_gpu;
-        tot_ssd += task.time_ssd;
+        tot_reads.fetch_add(task->num_reads);
+        tot_gpu += task->time_gpu;
+        tot_ssd += task->time_ssd;
 
-        tot_init_issue += task.time_init_issue;
-        tot_gpu_issue += task.time_gpu_issue;
-        tot_ssd_issue += task.time_ssd_issue;
-        tot_fin_issue += task.time_fin_issue;
-        tot_lat += task.latency;
-        cnt_batch += task.cnt_query;
+        tot_init_issue += task->time_init_issue;
+        tot_gpu_issue += task->time_gpu_issue;
+        tot_ssd_issue += task->time_ssd_issue;
+        tot_fin_issue += task->time_fin_issue;
+        tot_lat += task->latency;
+        cnt_batch += task->cnt_query;
 #ifdef LOAD_PROBE
-        for (int i = 0; i < (int) task.ssd_overall.size(); i++) {
+        for (int i = 0; i < (int) task->ssd_overall.size(); i++) {
           if (i == (int) round_probe.size()) {
-            round_probe.push_back(std::vector<double>(task.sample_ssd));
+            round_probe.push_back(std::vector<double>(task->sample_ssd));
           }
-          for (int j = 0; j < task.sample_ssd; j++) {
-            round_probe[i][j] += task.ssd_overall[i][j];
-            //printf("%lf\n", task.ssd_overall[i][j]);
+          for (int j = 0; j < task->sample_ssd; j++) {
+            round_probe[i][j] += task->ssd_overall[i][j];
+            //printf("%lf\n", task->ssd_overall[i][j]);
           }
         }
-        for (auto x: task.freq) {
+        for (auto x: task->freq) {
           tot_freq[x.first] += x.second;
         }
 #endif

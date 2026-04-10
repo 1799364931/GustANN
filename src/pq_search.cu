@@ -5,11 +5,58 @@
 #include "common_cuda.cuh"
 
 namespace gustann {
+  namespace {
+    template <class T>
+    void delete_array(T*& ptr) {
+      delete[] ptr;
+      ptr = nullptr;
+    }
+
+    template <class T>
+    void free_device_ptr(T*& ptr) {
+      if (ptr) {
+        CHECK_CUDA(cudaFree(ptr));
+        ptr = nullptr;
+      }
+    }
+  } // namespace
+
   template <class T>
   static void read_bin(std::string file, int &npts, int &ndim, size_t offset,
                        T *&data);
 
+  PQSearch::~PQSearch() {
+    release_device_data();
+    release_host_data();
+  }
+
+  void PQSearch::release_host_data() {
+    delete_array(host_data.centroid);
+    delete_array(host_data.pivots);
+    delete_array(host_data.pivots_t);
+    delete_array(host_data.chunk_id);
+    delete_array(host_data.compressed_data);
+    host_data = PQSearchData{};
+  }
+
+  void PQSearch::release_device_data() {
+    free_device_ptr(device_data.centroid);
+    free_device_ptr(device_data.pivots);
+    free_device_ptr(device_data.pivots_t);
+    free_device_ptr(device_data.chunk_id);
+    free_device_ptr(device_data.compressed_data);
+    free_device_ptr(device_data.pq_dists);
+    free_device_ptr(device_data.pq_retset);
+    free_device_ptr(device_ptr);
+    device_data = PQSearchData{};
+    pq_dists_capacity_ = 0;
+    device_static_ready_ = false;
+  }
+
   void PQSearch::read_data(std::string table_file, std::string vec_file) {
+    release_device_data();
+    release_host_data();
+
     DEBUG("Reading Compressed data");
     read_bin(vec_file, host_data.num_pts, host_data.num_chunks, 0, host_data.compressed_data);
     /*
@@ -85,39 +132,49 @@ namespace gustann {
            1.0 * free_mem, 1.0 * tot_mem );
 #endif
   
-    device_data = host_data;
-    copy_to_dev(host_data.centroid, device_data.centroid, host_data.dim);
-    copy_to_dev(host_data.pivots, device_data.pivots,
-                (size_t) host_data.num_pivots * host_data.dim);
-    copy_to_dev(host_data.pivots_t, device_data.pivots_t,
-                (size_t) host_data.num_pivots * host_data.dim);
-    copy_to_dev(host_data.chunk_id, device_data.chunk_id, host_data.dim);
+    if (!device_static_ready_) {
+      device_data = host_data;
+      copy_to_dev(host_data.centroid, device_data.centroid, host_data.dim);
+      copy_to_dev(host_data.pivots, device_data.pivots,
+                  (size_t) host_data.num_pivots * host_data.dim);
+      copy_to_dev(host_data.pivots_t, device_data.pivots_t,
+                  (size_t) host_data.num_pivots * host_data.dim);
+      copy_to_dev(host_data.chunk_id, device_data.chunk_id, host_data.dim);
 
 #ifdef MEM_PROFILE
-    CHECK_CUDA(cudaMemGetInfo(&free_mem, &tot_mem));
-    printf("Now %lf/%lf B free mem\n",
-           1.0 * free_mem, 1.0 * tot_mem );
+      CHECK_CUDA(cudaMemGetInfo(&free_mem, &tot_mem));
+      printf("Now %lf/%lf B free mem\n",
+             1.0 * free_mem, 1.0 * tot_mem );
 #endif
-    copy_to_dev(host_data.compressed_data, device_data.compressed_data,
-                (size_t) host_data.num_pts * host_data.num_chunks);
+      copy_to_dev(host_data.compressed_data, device_data.compressed_data,
+                  (size_t) host_data.num_pts * host_data.num_chunks);
 #ifdef MEM_PROFILE
-    CHECK_CUDA(cudaMemGetInfo(&free_mem, &tot_mem));
-    printf("Now %lf/%lf B free mem\n",
-           1.0 * free_mem, 1.0 * tot_mem );
+      CHECK_CUDA(cudaMemGetInfo(&free_mem, &tot_mem));
+      printf("Now %lf/%lf B free mem\n",
+             1.0 * free_mem, 1.0 * tot_mem );
 #endif
-    /*
-      CHECK_CUDA(cudaMallocHost(&device_data.compressed_data,
-      sizeof(uint8_t) * host_data.num_pts * host_data.num_chunks));
-      memcpy(device_data.compressed_data, host_data.compressed_data,
-      sizeof(uint8_t) * host_data.num_pts * host_data.num_chunks);
-    */
-    // AB_BUFFER
-    CHECK_CUDA(cudaMalloc(&device_data.pq_dists, sizeof(float) * num_thread_blocks * host_data.num_pivots * host_data.num_chunks));
+      if (!device_ptr) {
+        CHECK_CUDA(cudaMalloc(&device_ptr, sizeof(PQSearchData)));
+      }
+      device_static_ready_ = true;
+    }
+
+    if (pq_dists_capacity_ < num_thread_blocks) {
+      free_device_ptr(device_data.pq_dists);
+      CHECK_CUDA(cudaMalloc(
+          &device_data.pq_dists,
+          sizeof(float) * num_thread_blocks * host_data.num_pivots *
+              host_data.num_chunks));
+      pq_dists_capacity_ = num_thread_blocks;
+    }
+    device_data.pq_retset = nullptr;
+    (void)ef_search;
     //CHECK_CUDA(cudaMalloc(&device_data.pq_retset, sizeof(PQData) * num_thread_blocks * ef_search));
   
   
     DEBUG("F");
-    copy_to_dev(&device_data, device_ptr, 1);
+    CHECK_CUDA(cudaMemcpy(device_ptr, &device_data, sizeof(PQSearchData),
+                          cudaMemcpyHostToDevice));
     DEBUG("PQ data moved to device");
 
 #ifdef MEM_PROFILE

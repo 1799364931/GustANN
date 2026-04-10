@@ -423,4 +423,42 @@ namespace gustann {
            1.0 * free_mem, 1.0 * tot_mem );
 #endif
   }
+
+  TaskRunner::~TaskRunner() {
+    if (stream) {
+      CHECK_CUDA(cudaStreamSynchronize(stream));
+    }
+
+#ifdef COPY_DATA
+    if (buffer_dev) {
+      CHECK_CUDA(cudaFree(buffer_dev));
+    }
+    if (request_dev) {
+      CHECK_CUDA(cudaFree(request_dev));
+    }
+#endif
+
+    if (d_qdata) {
+      CHECK_CUDA(cudaFree(d_qdata));
+    }
+    if (d_nns) {
+      CHECK_CUDA(cudaFree(d_nns));
+    }
+    if (d_distances) {
+      CHECK_CUDA(cudaFree(d_distances));
+    }
+    if (d_found_cnt) {
+      CHECK_CUDA(cudaFree(d_found_cnt));
+    }
+    if (request) {
+      CHECK_CUDA(cudaFreeHost(request));
+    }
+    if (buffer) {
+      CHECK_CUDA(cudaHostUnregister(buffer));
+      loader->destroy_buffer(buffer);
+    }
+    if (stream) {
+      CHECK_CUDA(cudaStreamDestroy(stream));
+    }
+  }
 }

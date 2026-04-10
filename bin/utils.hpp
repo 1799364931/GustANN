@@ -56,33 +56,6 @@ inline int *ivecs_read(const char *fname, size_t *d_out, size_t *n_out) {
   return (int *)fvecs_read(fname, d_out, n_out);
 }
 
-template <class T>
-inline T* bin_read(const char* fname, size_t &d_out, size_t &n_out) {
-  std::ifstream ifile(fname, std::ios::binary);
-  int npts, ndims;
-  ifile.read((char *)&npts, sizeof(int32_t));
-  ifile.read((char *)&ndims, sizeof(int32_t));
-  d_out = ndims;
-  n_out = npts;
-  T* result = new T[1l * ndims * npts];
-  ifile.read((char *) result, sizeof(T) * ndims * npts);
-  return result;
-}
-
-inline float calc_recall(int* res, int* gt, int num, int dim, int k) {
-  int cnt = 0;
-  assert(k <= dim);
-  for (int i = 0; i < num; i++) {
-    std::set<int> s(gt + i * dim, gt + i * dim + k);
-    for (int j = 0; j < k; j++) {
-      if (s.find(res[i * k + j]) != s.end()) {
-        cnt++;
-      }
-    }
-  }
-  return 1.0 * cnt / (num * k);
-}
-
 inline uint8_t *bvecs_read(const char *fname, size_t *d_out, size_t *n_out) {
   FILE *f = fopen(fname, "r");
   if (!f) {
@@ -113,3 +86,32 @@ inline uint8_t *bvecs_read(const char *fname, size_t *d_out, size_t *n_out) {
   fclose(f);
   return x;
 }
+
+template <class T>
+inline T* bin_read(const char* fname, size_t &d_out, size_t &n_out) {
+  std::ifstream ifile(fname, std::ios::binary);
+  int npts, ndims;
+  ifile.read((char *)&npts, sizeof(int32_t));
+  ifile.read((char *)&ndims, sizeof(int32_t));
+  d_out = ndims;
+  n_out = npts;
+  T* result = new T[1l * ndims * npts];
+  ifile.read((char *) result, sizeof(T) * ndims * npts);
+  return result;
+}
+
+
+inline float calc_recall(int* res, int* gt, int num, int dim, int k) {
+  int cnt = 0;
+  assert(k <= dim);
+  for (int i = 0; i < num; i++) {
+    std::set<int> s(gt + i * dim, gt + i * dim + k);
+    for (int j = 0; j < k; j++) {
+      if (s.find(res[i * k + j]) != s.end()) {
+        cnt++;
+      }
+    }
+  }
+  return 1.0 * cnt / (num * k);
+}
+

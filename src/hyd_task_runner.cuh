@@ -38,6 +38,11 @@ namespace gustann {
                uint8_t *_starter, PQSearch *_pq, int nodes_per_page,
                int node_size, int data_size, DataType data_type,
                std::shared_ptr<IndexLoader> _loader, NavGraph *_nav);
+    ~TaskRunner();
+    TaskRunner(const TaskRunner&) = delete;
+    TaskRunner& operator=(const TaskRunner&) = delete;
+    TaskRunner(TaskRunner&&) = delete;
+    TaskRunner& operator=(TaskRunner&&) = delete;
 
   public:
     double time_gpu;
@@ -51,10 +56,10 @@ namespace gustann {
     double time_fin_issue;
 
   private:
-    float* d_qdata; // (mini_batch * num_dims_);
-    int* d_nns; //(mini_batch * topk);
-    float* d_distances; //(mini_batch * topk);
-    int* d_found_cnt; //(mini_batch, 0);
+    float* d_qdata = nullptr; // (mini_batch * num_dims_);
+    int* d_nns = nullptr; //(mini_batch * topk);
+    float* d_distances = nullptr; //(mini_batch * topk);
+    int* d_found_cnt = nullptr; //(mini_batch, 0);
     
     thrust::device_vector<float> d_tmp_dist; //(mini_batch * max_m0_);
     thrust::device_vector<int> d_tmp_id; //(mini_batch * max_m0_);
@@ -65,10 +70,10 @@ namespace gustann {
 
     DataType data_type;
       
-    uint8_t* buffer;
-    int32_t* request;
+    uint8_t* buffer = nullptr;
+    int32_t* request = nullptr;
 
-    cudaStream_t stream;
+    cudaStream_t stream = nullptr;
     double t0;
 
     int mini_batch, num_dims, topk, max_m0, ef_search, aligned_ef;
@@ -79,15 +84,15 @@ namespace gustann {
     int stream_offset;
     int cid;
     int tid;
-    int *nns;
-    float *distances;
-    int *found_cnt;
+    int *nns = nullptr;
+    float *distances = nullptr;
+    int *found_cnt = nullptr;
     int tcnt;
     int64_t num_data;
-    PQSearch* pq;
+    PQSearch* pq = nullptr;
 #ifdef COPY_DATA
-    uint8_t* buffer_dev;
-    int32_t* request_dev;
+    uint8_t* buffer_dev = nullptr;
+    int32_t* request_dev = nullptr;
 #endif
     std::shared_ptr<IndexLoader> loader;
     
@@ -98,15 +103,15 @@ namespace gustann {
       Q_RES,
       Q_FIN,
     } state;
-    uint8_t *starter;
+    uint8_t *starter = nullptr;
     unsigned int seed;
     int round;
 
-    int* start_pt;
-    NavGraph* nav_graph;
+    int* start_pt = nullptr;
+    NavGraph* nav_graph = nullptr;
 
     /// GGG
-    uint8_t* test_pool;
+    uint8_t* test_pool = nullptr;
 #ifdef LOAD_PROBE
     std::vector<std::vector<double>> ssd_overall;
     static constexpr int sample_ssd = 6;

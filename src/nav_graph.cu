@@ -6,9 +6,42 @@
 
 namespace gustann {
 
+namespace {
+template <class T>
+void delete_array(T*& ptr) {
+  delete[] ptr;
+  ptr = nullptr;
+}
+
+template <class T>
+void free_device_ptr(T*& ptr) {
+  if (ptr) {
+    CHECK_CUDA(cudaFree(ptr));
+    ptr = nullptr;
+  }
+}
+} // namespace
+
+void NavGraph::clear() {
+    mapping.clear();
+    delete_array(data);
+    delete_array(graph);
+    free_device_ptr(data_dev);
+    free_device_ptr(graph_dev);
+    data_len = 0;
+    num_node = 0;
+    start = 0;
+    max_m = 0;
+}
+
+NavGraph::~NavGraph() {
+    clear();
+}
+
 void NavGraph::init(std::string index_file, std::string data_file,
                     std::string map_file, int data_size
 ) {
+    clear();
     FILE* f = fopen(data_file.c_str(), "r");
     if (!f) {
       ERROR("Failed to open data file: {}", data_file);

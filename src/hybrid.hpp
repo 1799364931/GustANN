@@ -12,6 +12,7 @@ namespace gustann {
   class HybridExecutor {
   public:
     HybridExecutor(const Layout &layout, const DataType &data_type, const std::string &fpath, const HybridExecutorConfig& config);
+    ~HybridExecutor();
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
                 PQSearch *pq = nullptr, NavGraph *nav = nullptr);
@@ -19,7 +20,7 @@ namespace gustann {
     Layout layout_;
     DataType data_type_;
 
-    uint8_t* starter_;
+    uint8_t* starter_ = nullptr;
 
     std::shared_ptr<IndexLoader> loader_;
 
