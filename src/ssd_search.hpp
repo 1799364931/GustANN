@@ -21,6 +21,10 @@ namespace gustann {
     std::string pq_file_prefix;
     std::string nav_graph_prefix;
   };
+
+  struct GustANNStats {
+    double run_time;
+  };
   
   class GustANN {
     Layout layout_;  
@@ -73,7 +77,7 @@ namespace gustann {
 
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances,
-                int *found_cnt);
+                int *found_cnt, GustANNStats* stats = nullptr);
 
     ~GustANN();
   };

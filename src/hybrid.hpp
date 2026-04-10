@@ -9,13 +9,16 @@
 #include "io/interface.hpp"
 
 namespace gustann {
+  struct GustANNStats;
+
   class HybridExecutor {
   public:
     HybridExecutor(const Layout &layout, const DataType &data_type, const std::string &fpath, const HybridExecutorConfig& config);
     ~HybridExecutor();
     void search(const float *qdata, const int num_queries, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
-                PQSearch *pq = nullptr, NavGraph *nav = nullptr);
+                PQSearch *pq = nullptr, NavGraph *nav = nullptr,
+                GustANNStats *stats = nullptr);
   private:
     Layout layout_;
     DataType data_type_;

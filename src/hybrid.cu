@@ -19,6 +19,7 @@
 #include "nav_graph.hpp"
 //#include "ssd_search_kernel.hpp"
 #include "hyd_task_runner.cuh"
+#include "ssd_search.hpp"
 
 #include "io/interface.hpp"
 
@@ -116,7 +117,8 @@ namespace gustann {
 
   void HybridExecutor::search(const float *qdata, int num_queries, int topk,
                              int ef_search, int *nns, float *distances, int *found_cnt,
-                              PQSearch *pq_, NavGraph *nav_
+                              PQSearch *pq_, NavGraph *nav_,
+                              GustANNStats *stats
                              ) {
     int batch_cnt = mini_batch_ * thread_cnt_ * ctx_per_thread_;
     //num_queries = 1;
@@ -293,6 +295,9 @@ namespace gustann {
     double end = elapsed();
     DEBUG("End Search");
     INFO("Use time: {}", end - start);
+    if (stats) {
+      stats->run_time = end - start;
+    }
     INFO("Total reads: {}", tot_reads.load());
     REPORT("Time %lf", end - start);
     REPORT("IO %d", tot_reads.load());

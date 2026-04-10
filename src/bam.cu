@@ -14,6 +14,7 @@
 #include "common_cuda.cuh"
 #include "nav_graph.hpp"
 #include "bam.hpp"
+#include "ssd_search.hpp"
 //#include "ssd_search_kernel.hpp"
 
 #include "impl/bam/def.cuh"
@@ -183,7 +184,8 @@ namespace gustann {
   void BaMExecutor::search(const float *qdata, const int num_queries_,
                            const int topk, const int ef_search, int *nns,
                            float *distances, int *found_cnt,
-                           PQSearch *pq, NavGraph *nav_graph) {
+                           PQSearch *pq, NavGraph *nav_graph,
+                           GustANNStats *stats) {
     int num_queries = num_queries_;
     //num_queries = 10;   
     
@@ -277,6 +279,9 @@ namespace gustann {
 
     DEBUG("End Search");
     INFO("Use time: {}", end - start);
+    if (stats) {
+      stats->run_time = end - start;
+    }
     std::vector<int64_t> acc_visited_cnt(block_cnt_);
     thrust::copy(d_nns.begin(), d_nns.end(), nns);
     thrust::copy(d_distances.begin(), d_distances.end(), distances);

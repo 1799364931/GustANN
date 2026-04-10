@@ -113,25 +113,25 @@ namespace gustann {
 
   void GustANN::search(const float *qdata, const int num_queries_,
                        const int topk, const int ef_search, int *nns,
-                       float *distances, int *found_cnt) {
+                       float *distances, int *found_cnt, GustANNStats *stats) {
       
 #ifdef USE_BAM
     if (search_type == BAM) {
       search_executor_.bam->search(qdata, num_queries_, topk, ef_search, nns, distances,
-                   found_cnt, pq_, nav_);
+                   found_cnt, pq_, nav_, stats);
       return;
     }
 #endif
 
     if (search_type == HYBRID) {
       search_executor_.hybrid->search(qdata, num_queries_, topk, ef_search, nns,
-                               distances, found_cnt, pq_, nav_);
+                               distances, found_cnt, pq_, nav_, stats);
       return;
     }
 
     if (search_type == PURE_MEM) {
       search_executor_.pure_mem->search(qdata, num_queries_, topk, ef_search, nns,
-                                 distances, found_cnt, pq_, nav_);
+                                 distances, found_cnt, pq_, nav_, stats);
       return;
     }
 

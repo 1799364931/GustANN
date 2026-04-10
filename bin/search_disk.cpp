@@ -29,6 +29,8 @@ int main(int argc, char **argv) {
   int topk = 100;
   int ef_search = 300;
 
+  std::vector<int> ef_searches;
+
   int thread, batch, ctx_per_thread;
   std::string pq_data;
   int repeat = 20; // FIXME: repeat value cannot be too small???
@@ -51,7 +53,7 @@ int main(int argc, char **argv) {
   program.add_argument("--ground_truth").store_into(gt_file);
   program.add_argument("--data_type").required().store_into(data_type);
   program.add_argument("--topk").store_into(topk);
-  program.add_argument("--ef_search").store_into(ef_search);  
+  program.add_argument("--ef_search").nargs(argparse::nargs_pattern::at_least_one).store_into(ef_searches);  
   program.add_argument("--pq_data").required().store_into(search_config.pq_file_prefix);
   program.add_argument("--nav_graph").store_into(search_config.nav_graph_prefix);
   program.add_argument("--repeat", "-R").store_into(repeat);
@@ -183,25 +185,74 @@ int main(int argc, char **argv) {
   std::unique_ptr<int[]> nns(new int [nq * topk]);
   std::unique_ptr<float[]> dis(new float [nq * topk]);
   std::unique_ptr<int[]> found_cnt(new int[nq]);
-  
-  a.search(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get());
 
-
-  
-  for (int i = 0; i < 5; i++) {
-    for (int j = 0; j < 5; j++) {
-      printf("%lf(%d)\t", dis[i * topk + j], nns[i * topk + j]);
-    }
-    printf("\n");
+  ASSERT(ef_searches.size() > 0);
+  for (auto ef_search : ef_searches) {
+    ASSERT(ef_search >= topk);
   }
 
-  if (gt_file.length() > 0) {
+  if (ef_searches.size() == 1) {
+    a.search(data, nq, topk, ef_searches[0], nns.get(), dis.get(), found_cnt.get());
+    
+    
+    
+    for (int i = 0; i < 5; i++) {
+      for (int j = 0; j < 5; j++) {
+        printf("%lf(%d)\t", dis[i * topk + j], nns[i * topk + j]);
+      }
+      printf("\n");
+    }
+    
+    if (gt_file.length() > 0) {
+      size_t gt_d, gt_nq;
+      int* gt = ivecs_read(gt_file.c_str(), &gt_d, &gt_nq);
+      //printf("%d\n", gt[0]);
+      double recall = calc_recall(nns.get(), gt, gt_nq, gt_d, topk);    
+      printf("Recall @ %d: %lf\n", topk, recall);
+      printf("[REPORT] RECALL: %lf\n", recall);
+    }
+  } else {
     size_t gt_d, gt_nq;
-    int* gt = ivecs_read(gt_file.c_str(), &gt_d, &gt_nq);
-    //printf("%d\n", gt[0]);
-    double recall = calc_recall(nns.get(), gt, gt_nq, gt_d, topk);    
-    printf("Recall @ %d: %lf\n", topk, recall);
-    printf("[REPORT] RECALL: %lf\n", recall);
+    int* gt = nullptr;
+    if (gt_file.length() > 0) {     
+      gt = ivecs_read(gt_file.c_str(), &gt_d, &gt_nq);
+    }
+
+    struct Result {
+      int ef_search;
+      double qps;
+      double recall;
+    };
+    std::vector<Result> results;
+
+    for (int ef_search : ef_searches) {
+      gustann::GustANNStats stats;
+      a.search(data, nq, topk, ef_search, nns.get(), dis.get(), found_cnt.get(),
+               &stats);
+      results.push_back(Result{
+          .ef_search = ef_search,
+          .qps = nq / stats.run_time,
+          .recall = (gt && topk <= gt_d)
+                        ? calc_recall(nns.get(), gt, gt_nq, gt_d, topk)
+                        : -1          
+        });
+    }
+
+    
+    std::string recall_header = gt ? ("Recall@" + std::to_string(topk)) : "Recall";
+    printf("\n%-12s %-18s %-18s %-18s\n",
+           "L", "Run Time (s)", "QPS", recall_header.c_str());
+    printf("%-12s %-18s %-18s %-18s\n",
+           "------------", "------------------", "------------------", "------------------");
+    for (const auto& res : results) {
+      if (res.recall >= 0) {
+        printf("%-12d %-18.6f %-18.2f %-18.6f\n",
+               res.ef_search, nq / res.qps, res.qps, res.recall);
+      } else {
+        printf("%-12d %-18.6f %-18.2f %-18s\n",
+               res.ef_search, nq / res.qps, res.qps, "N/A");
+      }
+    }
   }
   
 }

@@ -15,12 +15,14 @@
 #include "nav_graph.hpp"
 
 namespace gustann {
+  struct GustANNStats;
+
   class BaMExecutor {
   public:
     BaMExecutor(const std::string &fpath, const Layout& layout, const DataType& data_type, const BaMConfig& config, bool copy_data);
     void search(const float *qdata, const int num_queries_, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
-                PQSearch* pq, NavGraph* nav);
+                PQSearch* pq, NavGraph* nav, GustANNStats* stats = nullptr);
   private:
     struct BaMContext {
       std::vector<Controller *> ctrls;

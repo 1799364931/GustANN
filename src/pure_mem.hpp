@@ -11,13 +11,14 @@
 #include "nav_graph.hpp"
 
 namespace gustann {
+  struct GustANNStats;
   
   class PureMemExecutor {
   public:
     PureMemExecutor(const std::string &fpath, const Layout& layout, const DataType& data_type, bool use_gpu_mem);
     void search(const float *qdata, const int num_queries_, const int topk,
                 const int ef_search, int *nns, float *distances, int *found_cnt,
-                PQSearch *pq, NavGraph *nav);
+                PQSearch *pq, NavGraph *nav, GustANNStats *stats = nullptr);
     ~PureMemExecutor();
     
   private:
