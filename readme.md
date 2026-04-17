@@ -5,7 +5,7 @@ GustANN is a high-throughput billion-scale graph-based vector store on GPU, base
 **Features:**
 + **High Throughput**: ~250K QPS for billion-scale dataset (SIFT1B, top-10, recall=0.9), 7.81x of DiskANN
 + **Memory Efficient**: ~40GB memory usage for both GPU and CPU on billion-scale dataset.
-+ **Flexible Interface**: supports flexible search-mode (SSD-based, all-in-DRAM, all-in-GPU) with multiple storage backends (SPDK, io-uring, aio).
++ **Flexible Interface**: supports flexible search-mode (SSD-based, all-in-DRAM, all-in-GPU) with multiple storage backends (SPDK, liburing, libaio).
 
 
 
@@ -28,8 +28,8 @@ You can quickly set up a 1M vector database to try GustANN using the script `scr
 We use [DiskANN](https://github.com/microsoft/DiskANN) to build the vector index. 
 To build DiskANN, install the following dependencies (for Ubuntu 22.04):
 
-``` shell-session
-# apt install make cmake g++ libaio-dev libgoogle-perftools-dev clang-format libboost-all-dev libmkl-full-dev libjemalloc-dev
+``` bash
+sudo apt install make cmake g++ libaio-dev libgoogle-perftools-dev clang-format libboost-all-dev libmkl-full-dev libjemalloc-dev
 ```
 
 Also, install CUDA according to the instruction from [NVIDIA](https://developer.nvidia.com/cuda-downloads).
@@ -40,30 +40,19 @@ Other dependencies of GustANN is listed in `deps/` directory.
 
 First, clone the repository:
 
-``` shell-session
-$ git clone https://github.com/thustorage/GustANN.git --recursive
-$ cd GustANN
+``` bash
+git clone https://github.com/thustorage/GustANN.git --recursive
+cd GustANN
 ```
 
-Then, build DiskANN (for index building only):
+Then, build GustANN:
 
-``` shell-session
-$ cd deps/DiskANN
-$ mkdir build
-$ cd build
-$ cmake ..
-$ make -j
-$ cd ../../..
-```
-
-Finally, build GustANN:
-
-``` shell-session
-$ mkdir -p build
-$ cd build
-$ cmake ..
-$ make -j
-$ cd ..
+``` bash
+mkdir -p build
+cd build
+cmake ..
+make -j
+cd ..
 ```
 
 To build different storage backend, you can turn on the switch `-DCMAKE_USE_{SPDK,URING,AIO}=ON`
@@ -77,10 +66,22 @@ Note that PipeANN uses a different argument format to DiskANN.
 
 **If you have built the index, please skip this step.**
 
+You can first compile DiskANN with the following:
+
+``` bash
+cd deps/DiskANN
+mkdir build
+cd build
+cmake ..
+make -j
+cd ../../..
+```
+
+
 To build a DiskANN index, you need to prepare a dataset in `bin` format.
 To convert the dataset, DiskANN provides some utilities to convert from `bvec/fvec`(format that SIFT dataset uses):
 
-``` shell-session
+``` bash
 $ ./deps/DiskANN/build/apps/utils/fvecs_to_bin <float/uint8> input_vecs output_bin
 ```
 
@@ -99,8 +100,8 @@ The key arguments are specified like this:
 
 Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
 
-``` shell-session
-$ ./scripts/build_disann_index.sh <pq_size> <memory>
+``` bash
+./scripts/build_disann_index.sh <pq_size> <memory>
 ```
 
 ### Prepare GustANN Index
@@ -110,8 +111,8 @@ In addition to the original DiskANN index, GustANN needs the build a pivot graph
 We have provided scripts to build the pivot graph easily.
 Please modify the `scripts/setup.sh` according to the instruction in it, and run:
 
-``` shell-session
-$ ./scripts/gen_pivot_graph.sh
+``` bash
+./scripts/gen_pivot_graph.sh
 ```
 
 
@@ -119,11 +120,11 @@ $ ./scripts/gen_pivot_graph.sh
 
 **For small datasets (e.g., < 100M vectors), we suggest to store the dataset in DRAM or in GPU memory to achieve better performance.**
 
-``` shell-session
-$ ./build/bin/search_mem \
+``` bash
+./build/bin/search_mem \
       --query <query_file> --index <index_file> --ground_truth <ground_truth> \
       --pq_data <pq_file> --nav_graph <nav_graph> --data_type <data_type> \
-      --topk <topk> --ef_search <L> -R <R> [-G]
+      --topk <topk> --ef_search <L> [<L2> ... ] -R <R> [-G]
 ```
 
 The meanings of each arguments are shown as follows:
@@ -135,14 +136,14 @@ The meanings of each arguments are shown as follows:
 + `nav_graph`: The additional GustANN index (the `nav/` directory)
 + `data_type`: `uint8` for SIFT dataset, `float` for DEEP dataset. For other datasets, please refer to their documents. Only these two data types are supported.
 + `topk`: How many top-k vectors are searched
-+ `L`: How many vectors are stored during the search (The higher, the more accurate)
++ `L`: How many vectors are stored during the search (The higher, the more accurate). You can try multiple `L`s in one run.
 + `R`: Repeat the query `R` times. Set it to greater than 1 for a more accurate throughput benchmark, if the query set is small.
 + `G`: When turned on, it is searched purely on the GPU. Best performance, but only for small datasets.
 
 Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
 
-``` shell-session
-$ ./scripts/run_mem.sh --topk <topk> --ef_search <L> -R <R> [-G]
+``` bash
+./scripts/run_mem.sh --topk <topk> --ef_search <L> [<L2> ...] -R <R> [-G]
 ```
 
 ### Run on-SSD GustANN
@@ -155,25 +156,25 @@ To use SPDK, **root privillege is needed**. There should be no partitions or fil
 
 #### Build SPDK
 
-```
-$ git clone https://github.com/spdk/spdk deps/spdk # we have tested GustANN on git commit 7c0720d1d
-$ cd deps/spdk
-$ sudo scripts/pkgdep.sh # Install the dependency of SPDK
-$ ./configure
-$ make -j
-$ cd ../..
+``` bash
+git clone https://github.com/spdk/spdk deps/spdk # we have tested GustANN on git commit 7c0720d1d
+cd deps/spdk
+sudo scripts/pkgdep.sh # Install the dependency of SPDK
+./configure
+make -j
+cd ../..
 ```
 
 Then rebuild GustANN with `-DCMAKE_USE_SPDK=ON`
 
 #### Setup SPDK
 
-``` shell-session
-# ./deps/spdk/scripts/setup.sh # Setup SPDK Environment
-# ./deps/spdk/build/examples/hello_world # To check whether SPDK works fine
+``` bash
+sudo ./deps/spdk/scripts/setup.sh # Setup SPDK Environment
+sudo ./deps/spdk/build/examples/hello_world # To check whether SPDK works fine
 ```
 
-Ideally, you will see outputs similar to this:
+You will see outputs similar to this:
 
 ``` plain
 Attaching to 0000:8b:00.0
@@ -206,21 +207,19 @@ Collect all PCIe addresses for the SSDs you want you use in the format of XXXX:X
 
 Then, write the index contents into the SSD using the following utility:
 
-``` shell-session
-# ./build/spdk/spdk_write <index_file> <ssd_list>
+``` bash
+sudo ./build/spdk/spdk_write <index_file> <ssd_list>
 ```
 
 The `index_file` is the DiskANN index file (`<prefix>_disk.index`), `ssd_list` is the SSD list collected in the previous step.
 
 Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
 
-``` shell-session
-# ./scripts/write_spdk.sh
+``` bash
+sudo ./scripts/write_spdk.sh
 ```
 
-### Setup LibUring
-
-#### Download and build
+### Setup liburing
 
 ``` bash
 git clone https://github.com/axboe/liburing.git deps/liburing # We have tested on commit 20b3fe67
@@ -231,23 +230,34 @@ cd ../..
 
 Then rebuild GustANN with `-DCMAKE_USE_URING=ON`
 
+### Setup libaio
+
+A linux kernel supporting libaio is needed. Then rebuild GustANN with `-DCMAKE_USE_AIO=ON`.
+
 ### Run GustANN
 
-``` shell-session
-# ./build/bin/search_disk_hybrid --query <query_file> --index <index_file> --ground_truth <ground_truth> --pq_data <pq_file> --nav_graph <nav_graph> --data_type <data_type> --io_backend [spdk/uring/aio/memory] --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> --ssd_list_file <ssd_list>
+**When using SPDK, root privillege is needed.**
+
+``` bash
+./build/bin/search_disk_hybrid \
+    --query <query_file> --index <index_file> --ground_truth <ground_truth> \
+    --pq_data <pq_file> --nav_graph <nav_graph> \
+    --data_type <data_type> --io_backend [spdk/uring/aio/memory] \
+    --topk <topk> --ef_search <L> [<L2> ...] -B <B> -T <T> -C <C> -R <R> \
+    --ssd_list_file <ssd_list>
 ```
 
 
 The meanings of the arguments are shown as follows:
 
 + `query_file`: The query vectors (in `bvecs`/`fvecs` format)
-+ `index_file`: The DiskANN index
++ `index_file`: The DiskANN index (`<prefix>_disk.index`)
 + `ground_truth`: The ground truth (in `ivecs` format)
 + `pq_file`: The product quantilization (PQ) of all vectors (only need to type `<prefix>_pq`)
 + `nav_graph`: The additional GustANN index (the `nav/` directory)
 + `data_type`: `uint8` for SIFT dataset, `float` for DEEP dataset. For other datasets, please refer to their documents.
 + `topk`: How many top-k vectors are searched
-+ `L`: How many vectors are stored during the search (The higher, the more accurate)
++ `L`: How many vectors are stored during the search (The higher, the more accurate). You can try multiple `L`s in one run.
 + `B`: The minibatch size (1120 in the evaluation)
 + `T`: How many worker threads (2 in the evaluation)
 + `C`: How many minibatches for each thread (20 in the evaluation)
@@ -256,20 +266,20 @@ The meanings of the arguments are shown as follows:
 + `ssd_list`: The SSD list file. (SPDK only)
 
 Different I/O backends favor different worker configurations:
-+ SPDK: `T=2 C=20 B>=1000`
-+ IOUring/memory: `T=20 C=1 B>=1000`
-+ AIO: `T=2 C=10 B=256`
++ spdk: `T=2 C=20 B>=1000`
++ uring/memory: `T=20 C=1 B>=1000`
++ aio: `T=2 C=10 B=256` (Large `B` may lead to crash!)
 You may adjust these settings based on the performace of the SSDs.
 
 After the search finishes, the runtime, total SSD I/Os, and the recall will be printed on the stdout.
 
 Alternatively, after modifying the `scripts/setup.sh`, you can also execute the script:
 
-``` shell-session
-# ./scripts/run_spdk.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> # for SPDK
-$ ./scripts/run_uring.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> # for IOUring
-$ ./scripts/run_aio.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> # for AIO
-$ ./scripts/run.sh --topk <topk> --ef_serach <L> -B <B> -T <T> -C <C> -R <R> # for in-memory search
+``` bash
+sudo ./scripts/run_spdk.sh --topk <topk> --ef_search <L> [<L2> ...] -B <B> -T <T> -C <C> -R <R> # for SPDK
+./scripts/run_uring.sh     --topk <topk> --ef_search <L> [<L2> ...] -B <B> -T <T> -C <C> -R <R> # for liburing
+./scripts/run_aio.sh       --topk <topk> --ef_search <L> [<L2> ...] -B <B> -T <T> -C <C> -R <R> # for libaio
+./scripts/run.sh           --topk <topk> --ef_search <L> [<L2> ...] -B <B> -T <T> -C <C> -R <R> # for in-memory search
 ```
 
 ### GPU Direct-IO Support (Experimental)
