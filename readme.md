@@ -126,11 +126,16 @@ You can run GustANN using SPDK (fastest), liburing, or libaio.
 
 1.  **Build SPDK & GustANN:**
     ```bash
+    git clone https://github.com/spdk/spdk deps/spdk 
+    # Note: We have tested GustANN on git commit 7c0720d1d
+    
     cd deps/spdk
-    sudo scripts/pkgdep.sh
+    sudo scripts/pkgdep.sh # Install the dependency of SPDK
     ./configure && make -j
     cd ../..
-    # Remember to rebuild GustANN with: cmake .. -DCMAKE_USE_SPDK=ON
+    
+    # Remember to rebuild GustANN with SPDK enabled: 
+    # cd build && cmake .. -DCMAKE_USE_SPDK=ON && make -j && cd ..
     ```
 2.  **Setup SPDK:**
     ```bash
@@ -143,16 +148,28 @@ You can run GustANN using SPDK (fastest), liburing, or libaio.
     ```
 
 #### ⚙️ liburing / libaio Setup
-*   **liburing:** Run `./configure && make -j` inside `deps/liburing`. Rebuild GustANN with `-DCMAKE_USE_URING=ON`.
+*   **liburing:** 
+    ```bash
+    git clone https://github.com/axboe/liburing.git deps/liburing 
+    # Note: We have tested on commit 20b3fe67
+    
+    cd deps/liburing
+    ./configure && make -j
+    cd ../..
+    
+    # Remember to rebuild GustANN with: 
+    # cd build && cmake .. -DCMAKE_USE_URING=ON && make -j && cd ..
+    ```
 *   **libaio:** Ensure your Linux kernel supports libaio. Rebuild GustANN with `-DCMAKE_USE_AIO=ON`.
 
 #### ▶️ Execute On-SSD Search
 Update `scripts/setup.sh`, then run the appropriate script for your backend:
 
 ```bash
-sudo ./scripts/run_spdk.sh  --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> 
-./scripts/run_uring.sh      --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R>
-./scripts/run_aio.sh        --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> 
+sudo ./scripts/run_spdk.sh  --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> # for SPDK
+./scripts/run_uring.sh      --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> # for liburing
+./scripts/run_aio.sh        --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> # for libaio
+./scripts/run.sh            --topk <topk> --ef_search <L> -B <B> -T <T> -C <C> -R <R> # for in-memory fallback testing
 ```
 
 > [!IMPORTANT]  

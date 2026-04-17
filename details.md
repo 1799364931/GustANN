@@ -51,7 +51,7 @@ For small datasets (< 100M vectors) or pure GPU search, you can manually run the
 *   `query_file`: Path to the query vectors (must be in `bvecs`/`fvecs` format).
 *   `index_file`: The DiskANN index file (usually `<index_prefix>_disk.index`).
 *   `ground_truth`: Path to the ground truth file (in `ivecs` format).
-*   `pq_file`: The PQ data of all vectors (You only need to provide the `<index_prefix>_pq`).
+*   `pq_file`: The PQ data of all vectors. **(You only need to provide the `<index_prefix>_pq`)**.
 *   `nav_graph`: The additional GustANN index directory (usually the `nav/` directory).
 *   `data_type`: `uint8` for SIFT, `float` for DEEP. *(Note: Only these two types are currently supported).*
 *   `topk`: The number of nearest neighbors to search for.
@@ -84,7 +84,7 @@ sudo ./build/bin/search_disk_hybrid \
 *   `-T <T>`: Number of worker threads managing I/O.
 *   `-C <C>`: Number of minibatches allocated per thread.
 *   `-B <B>`: Minibatch size.
-*   `io_backend`: Defines the storage backend (`spdk`, `uring`, `aio`, or `memory`).
+*   `io_backend`: Defines the storage backend (`spdk`, `uring`, `aio`, or `memory` for in-memory fallback).
 *   `ssd_list_file`: Text file containing PCIe addresses (Required ONLY for `spdk`).
 
 *(For descriptions of `query_file`, `index`, `pq_data`, `L`, `R`, etc., please refer to Section 2 above).*
@@ -130,4 +130,3 @@ sudo ./build/spdk/spdk_write <index_file> <ssd_list_file>
 ```
 *   `index_file`: e.g., `/data/index_disk.index`
 *   `ssd_list_file`: The path to the text file created in step 4.2.
-
